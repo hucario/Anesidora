@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+        "sourceRoot": "./src",
+        "sourceMap": true,
+        "target": "es6",
+        "outDir": "build"
+    },
+    "include": [
+        "src/**/*"
+    ]
+}
