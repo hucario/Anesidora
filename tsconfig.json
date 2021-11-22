@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+        "sourceRoot": "./src",
+        "sourceMap": true,
+        "target": "esnext",
+        "outDir": "build"
+    },
+    "include": [
+        "src/**/*"
+    ]
+}

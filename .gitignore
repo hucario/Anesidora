@@ -6,3 +6,6 @@ common/js/jquery/*
 *.zip
 chrome_build/
 firefox_build/
+
+build/
+node_modules/
