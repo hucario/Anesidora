@@ -1,5 +1,3 @@
-/* exported MD5 */
-
 /**
 *
 *  MD5 (Message-Digest Algorithm)
@@ -7,117 +5,115 @@
 *
 **/
 
-var MD5 = function (string) {
-    "use strict";
-    function RotateLeft(lValue, iShiftBits) {
-        return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
+function RotateLeft(lValue, iShiftBits) {
+    return (lValue << iShiftBits) | (lValue >>> (32 - iShiftBits));
+}
+function AddUnsigned(lX, lY) {
+    var lX4, lY4, lX8, lY8, lResult;
+    lX8 = (lX & 0x80000000);
+    lY8 = (lY & 0x80000000);
+    lX4 = (lX & 0x40000000);
+    lY4 = (lY & 0x40000000);
+    lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
+    if (lX4 & lY4) {
+        return (lResult ^ 0x80000000 ^ lX8 ^ lY8);
     }
-
-    function AddUnsigned(lX, lY) {
-        var lX4, lY4, lX8, lY8, lResult;
-        lX8 = (lX & 0x80000000);
-        lY8 = (lY & 0x80000000);
-        lX4 = (lX & 0x40000000);
-        lY4 = (lY & 0x40000000);
-        lResult = (lX & 0x3FFFFFFF) + (lY & 0x3FFFFFFF);
-        if (lX4 & lY4) {
-            return (lResult ^ 0x80000000 ^ lX8 ^ lY8);
-        }
-        if (lX4 | lY4) {
-            if (lResult & 0x40000000) {
-                return (lResult ^ 0xC0000000 ^ lX8 ^ lY8);
-            } else {
-                return (lResult ^ 0x40000000 ^ lX8 ^ lY8);
-            }
+    if (lX4 | lY4) {
+        if (lResult & 0x40000000) {
+            return (lResult ^ 0xC0000000 ^ lX8 ^ lY8);
         } else {
-            return (lResult ^ lX8 ^ lY8);
+            return (lResult ^ 0x40000000 ^ lX8 ^ lY8);
         }
+    } else {
+        return (lResult ^ lX8 ^ lY8);
     }
+}
 
-    function F(x, y, z) { return (x & y) | ((~x) & z); }
-    function G(x, y, z) { return (x & z) | (y & (~z)); }
-    function H(x, y, z) { return (x ^ y ^ z); }
-    function I(x, y, z) { return (y ^ (x | (~z))); }
+function F(x, y, z) { return (x & y) | ((~x) & z); }
+function G(x, y, z) { return (x & z) | (y & (~z)); }
+function H(x, y, z) { return (x ^ y ^ z); }
+function I(x, y, z) { return (y ^ (x | (~z))); }
 
-    function FF(a, b, c, d, x, s, ac) {
-        a = AddUnsigned(a, AddUnsigned(AddUnsigned(F(b, c, d), x), ac));
-        return AddUnsigned(RotateLeft(a, s), b);
-    }
+function FF(a, b, c, d, x, s, ac) {
+    a = AddUnsigned(a, AddUnsigned(AddUnsigned(F(b, c, d), x), ac));
+    return AddUnsigned(RotateLeft(a, s), b);
+}
 
-    function GG(a, b, c, d, x, s, ac) {
-        a = AddUnsigned(a, AddUnsigned(AddUnsigned(G(b, c, d), x), ac));
-        return AddUnsigned(RotateLeft(a, s), b);
-    }
+function GG(a, b, c, d, x, s, ac) {
+    a = AddUnsigned(a, AddUnsigned(AddUnsigned(G(b, c, d), x), ac));
+    return AddUnsigned(RotateLeft(a, s), b);
+}
 
-    function HH(a, b, c, d, x, s, ac) {
-        a = AddUnsigned(a, AddUnsigned(AddUnsigned(H(b, c, d), x), ac));
-        return AddUnsigned(RotateLeft(a, s), b);
-    }
+function HH(a, b, c, d, x, s, ac) {
+    a = AddUnsigned(a, AddUnsigned(AddUnsigned(H(b, c, d), x), ac));
+    return AddUnsigned(RotateLeft(a, s), b);
+}
 
-    function II(a, b, c, d, x, s, ac) {
-        a = AddUnsigned(a, AddUnsigned(AddUnsigned(I(b, c, d), x), ac));
-        return AddUnsigned(RotateLeft(a, s), b);
-    }
+function II(a, b, c, d, x, s, ac) {
+    a = AddUnsigned(a, AddUnsigned(AddUnsigned(I(b, c, d), x), ac));
+    return AddUnsigned(RotateLeft(a, s), b);
+}
 
-    function ConvertToWordArray(string) {
-        var lWordCount;
-        var lMessageLength = string.length;
-        var lNumberOfWords_temp1 = lMessageLength + 8;
-        var lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
-        var lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
-        var lWordArray = Array(lNumberOfWords - 1);
-        var lBytePosition = 0;
-        var lByteCount = 0;
-        while (lByteCount < lMessageLength) {
-            lWordCount = (lByteCount - (lByteCount % 4)) / 4;
-            lBytePosition = (lByteCount % 4) * 8;
-            lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount) << lBytePosition));
-            lByteCount++;
-        }
+function ConvertToWordArray(string) {
+    var lWordCount;
+    var lMessageLength = string.length;
+    var lNumberOfWords_temp1 = lMessageLength + 8;
+    var lNumberOfWords_temp2 = (lNumberOfWords_temp1 - (lNumberOfWords_temp1 % 64)) / 64;
+    var lNumberOfWords = (lNumberOfWords_temp2 + 1) * 16;
+    var lWordArray = Array(lNumberOfWords - 1);
+    var lBytePosition = 0;
+    var lByteCount = 0;
+    while (lByteCount < lMessageLength) {
         lWordCount = (lByteCount - (lByteCount % 4)) / 4;
         lBytePosition = (lByteCount % 4) * 8;
-        lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80 << lBytePosition);
-        lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
-        lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
-        return lWordArray;
+        lWordArray[lWordCount] = (lWordArray[lWordCount] | (string.charCodeAt(lByteCount) << lBytePosition));
+        lByteCount++;
     }
+    lWordCount = (lByteCount - (lByteCount % 4)) / 4;
+    lBytePosition = (lByteCount % 4) * 8;
+    lWordArray[lWordCount] = lWordArray[lWordCount] | (0x80 << lBytePosition);
+    lWordArray[lNumberOfWords - 2] = lMessageLength << 3;
+    lWordArray[lNumberOfWords - 1] = lMessageLength >>> 29;
+    return lWordArray;
+}
 
-    function WordToHex(lValue) {
-        var WordToHexValue = "", WordToHexValue_temp = "", lByte, lCount;
-        for (lCount = 0; lCount <= 3; lCount++) {
-            lByte = (lValue >>> (lCount * 8)) & 255;
-            WordToHexValue_temp = "0" + lByte.toString(16);
-            WordToHexValue = WordToHexValue + WordToHexValue_temp.substr(WordToHexValue_temp.length - 2, 2);
+function WordToHex(lValue) {
+    var WordToHexValue = "", WordToHexValue_temp = "", lByte, lCount;
+    for (lCount = 0; lCount <= 3; lCount++) {
+        lByte = (lValue >>> (lCount * 8)) & 255;
+        WordToHexValue_temp = "0" + lByte.toString(16);
+        WordToHexValue = WordToHexValue + WordToHexValue_temp.substr(WordToHexValue_temp.length - 2, 2);
+    }
+    return WordToHexValue;
+}
+
+function Utf8Encode(string) {
+    string = string.replace(/\r\n/g, "\n");
+    var utftext = "";
+
+    for (var n = 0; n < string.length; n++) {
+
+        var c = string.charCodeAt(n);
+
+        if (c < 128) {
+            utftext += String.fromCharCode(c);
         }
-        return WordToHexValue;
-    }
-
-    function Utf8Encode(string) {
-        string = string.replace(/\r\n/g, "\n");
-        var utftext = "";
-
-        for (var n = 0; n < string.length; n++) {
-
-            var c = string.charCodeAt(n);
-
-            if (c < 128) {
-                utftext += String.fromCharCode(c);
-            }
-            else if ((c > 127) && (c < 2048)) {
-                utftext += String.fromCharCode((c >> 6) | 192);
-                utftext += String.fromCharCode((c & 63) | 128);
-            }
-            else {
-                utftext += String.fromCharCode((c >> 12) | 224);
-                utftext += String.fromCharCode(((c >> 6) & 63) | 128);
-                utftext += String.fromCharCode((c & 63) | 128);
-            }
-
+        else if ((c > 127) && (c < 2048)) {
+            utftext += String.fromCharCode((c >> 6) | 192);
+            utftext += String.fromCharCode((c & 63) | 128);
+        }
+        else {
+            utftext += String.fromCharCode((c >> 12) | 224);
+            utftext += String.fromCharCode(((c >> 6) & 63) | 128);
+            utftext += String.fromCharCode((c & 63) | 128);
         }
 
-        return utftext;
     }
 
+    return utftext;
+}
+
+export function MD5(string) {
     var x = Array();
     var k, AA, BB, CC, DD, a, b, c, d;
     var S11 = 7, S12 = 12, S13 = 17, S14 = 22;
