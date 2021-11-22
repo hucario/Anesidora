@@ -3,7 +3,9 @@
  * Made with information from https://6xq.net/pandora-apidoc/json/
  */
 
-export type Response<D> = ResponseOK<D | unknown> | ResponseFail;
+export const BASE_API_URL = "tuner.pandora.com/services/json/?method=";
+
+export type PandoraResponse<D> = ResponseOK<D> | ResponseFail;
 
 export type ResponseFail = {
     stat: "fail",
@@ -165,7 +167,28 @@ export type PandoraAccountSettings = {
     facebookSettingChecksum: boolean,
 }
 
-export namespace PAPIResponses {
+export type Bookmarks = {
+    artists: {
+        musicToken: string,
+        artistName: string,
+        artUrl: LinkishString,
+        bookmarkToken: string,
+        dateCreated: PandoraTime
+    }[],
+    songs: {
+        sampleUrl: LinkishString,
+        sampleGain: NumberishString,
+        albumName: string,
+        artistName: string,
+        musicToken: string,
+        dateCreated: PandoraTime,
+        artUrl: LinkishString,
+        bookmarkToken: string,
+        songName: string
+    }[]
+};
+
+export namespace PRes {
     export namespace test {
         export type checkLicensing = {
             isAllowed: boolean
@@ -186,26 +209,7 @@ export namespace PAPIResponses {
         /** This method returns no data. */
         export type sleepSong = PandoraResponseData;
 
-        export type getBookmarks = {
-            artists: {
-                musicToken: string,
-                artistName: string,
-                artUrl: LinkishString,
-                bookmarkToken: string,
-                dateCreated: PandoraTime
-            }[],
-            songs: {
-                sampleUrl: LinkishString,
-                sampleGain: NumberishString,
-                albumName: string,
-                artistName: string,
-                musicToken: string,
-                dateCreated: PandoraTime,
-                artUrl: LinkishString,
-                bookmarkToken: string,
-                songName: string
-            }[]
-        } & PandoraResponseData;
+        export type getBookmarks = Bookmarks & PandoraResponseData;
 
         export type validateUsername = {
             isValid: boolean
@@ -243,7 +247,7 @@ export namespace PAPIResponses {
             partnerAuthToken: string,
             partnerId: string
             /**
-             * Included if {@link PAPIRequests.auth.partnerLogin.returnDeviceType auth.partnerLogin['returnDeviceType']} is true
+             * Included if {@link PReq.auth.partnerLogin.returnDeviceType auth.partnerLogin['returnDeviceType']} is true
              */
             deviceProperties?: {
                 videoAdRefreshInterval: number,
@@ -253,7 +257,7 @@ export namespace PAPIResponses {
             },
             stationSkipUnit: string,
             /**
-             * Included if {@link PAPIRequests.auth.partnerLogin.includeUrls auth.partnerLogin['includeUrls']} is true
+             * Included if {@link PReq.auth.partnerLogin.includeUrls auth.partnerLogin['includeUrls']} is true
              */
             urls?: {
                 autoComplete: LinkishString
@@ -340,7 +344,7 @@ export namespace PAPIResponses {
             songName: string,
             artistName: string,
             /**
-             * See {@link PAPIRequests.station.deleteFeedback station.deleteFeedback}
+             * See {@link PReq.station.deleteFeedback station.deleteFeedback}
              */
             feedbackId: NumberishString,
             isPositive: boolean
@@ -352,7 +356,7 @@ export namespace PAPIResponses {
         export type addSeed = {
             /**
              * Can be used to remove seed with
-             * {@link PAPIRequests.station.deleteMusic station.deleteMusic}
+             * {@link PReq.station.deleteMusic station.deleteMusic}
              */
             seedId: string,
 
@@ -464,7 +468,7 @@ export namespace PAPIResponses {
         /**
          * Each station belongs to one category, usually a genre name.
          * `stationToken` can be used as `musicToken` to create a new station with
-         * {@link PAPIRequests.station.createStation station.createStation}.
+         * {@link PReq.station.createStation station.createStation}.
          */
         export type getGenreStations = {
             /** List of categories */
@@ -472,7 +476,7 @@ export namespace PAPIResponses {
                 /** List of stations in category */
                 stations: {
                     /** Actually a musicToken, see
-                     * {@link PAPIRequests.station.createStation station.createStation}. */
+                     * {@link PReq.station.createStation station.createStation}. */
                     stationToken: string,
                     stationName: string,
                     stationId: string
@@ -531,7 +535,7 @@ export namespace PAPIResponses {
             imageUrl: LinkishString,
             /**
              * Whether this is included or not depends on whether
-             * {@link PAPIRequests.ad.getAdMetadata.supportAudioAds PAPIRequests.ad.getAdMetadata['supportAudioAds']}
+             * {@link PReq.ad.getAdMetadata.supportAudioAds PAPIRequests.ad.getAdMetadata['supportAudioAds']}
              * is set to true.
              */
             audioUrlMap?: {
@@ -541,7 +545,7 @@ export namespace PAPIResponses {
             },
             /**
              * Whether this is included or not depends on whether
-             * {@link PAPIRequests.ad.getAdMetadata.returnAdTrackingTokens ad.getAdMetadata['returnAdTrackingTokens']}
+             * {@link PReq.ad.getAdMetadata.returnAdTrackingTokens ad.getAdMetadata['returnAdTrackingTokens']}
              * is set to true.
              */
             adTrackingTokens?: string[],
@@ -549,7 +553,7 @@ export namespace PAPIResponses {
              * `bannerAdMap` contains an HTML fragment for a banner ad.
              * 
              * Whether this is included or not depends on whether
-             * {@link PAPIRequests.ad.getAdMetadata.includeBannerAd ad.getAdMetadata['includeBannerAd']}
+             * {@link PReq.ad.getAdMetadata.includeBannerAd ad.getAdMetadata['includeBannerAd']}
              * is set to true.
              */
             bannerAdMap?: {
@@ -565,12 +569,12 @@ export namespace PAPIResponses {
     }
 }
 
-export namespace PAPIRequests {
+export namespace PReq {
     /**
      * Pandora is ad-free for Pandora One users.
      * For all other account types, the playlist returned by
-     * {@link PAPIRequests.station.getPlaylist station.getPlaylist} or
-     * {@link PAPIRequests.auth.userLogin auth.userLogin}
+     * {@link PReq.station.getPlaylist station.getPlaylist} or
+     * {@link PReq.auth.userLogin auth.userLogin}
      * will contain tracks with adToken values for the advertisements that should be played
      * (if audioUrl is provided) or displayed using imageUrl and bannerAdMap.
      */
@@ -582,14 +586,14 @@ export namespace PAPIRequests {
         export type registerAd = {
             /**
              * The ID of an existing station
-             * (see {@link PAPIRequests.station.getStation station.getStation},
-             * {@link PAPIRequests.user.getStationList user.getStationList})
+             * (see {@link PReq.station.getStation station.getStation},
+             * {@link PReq.user.getStationList user.getStationList})
              * to register the ads against 
              */
             stationId?: string,
             /**
              * The tokens of the ads to register (see
-             * {@link PAPIRequests.ad.getAdMetadata ad.getAdMetadata})
+             * {@link PReq.ad.getAdMetadata ad.getAdMetadata})
              */
             adTrackingTokens: string,
         } & PandoraRequestData;
@@ -603,11 +607,11 @@ export namespace PAPIRequests {
         export type getAdMetadata = {
             /**
              * The adToken to retrieve the metadata for.
-             * (see {@link PAPIRequests.station.getPlaylist station.getPlaylist})
+             * (see {@link PReq.station.getPlaylist station.getPlaylist})
              */
             adToken: string,
             /**
-             * `adTrackingTokens` are required by {@link PAPIRequests.ad.registerAd ad.registerAd}.
+             * `adTrackingTokens` are required by {@link PReq.ad.registerAd ad.registerAd}.
              */
             returnAdTrackingTokens?: boolean,
             /**
@@ -622,11 +626,11 @@ export namespace PAPIRequests {
     }
     export namespace bookmark {
         export type addArtistBookmark = {
-            /** See {@link PAPIRequests.station.getPlaylist station.getPlaylist} */
+            /** See {@link PReq.station.getPlaylist station.getPlaylist} */
             trackToken: string
         } & PandoraRequestData;
         export type addSongBookmark = {
-            /** See {@link PAPIRequests.station.getPlaylist station.getPlaylist} */
+            /** See {@link PReq.station.getPlaylist station.getPlaylist} */
             trackToken: string
         } & PandoraRequestData;
     }
@@ -637,7 +641,7 @@ export namespace PAPIRequests {
          * These stations cannot be modified (i.e. rate tracks) unless transformed (unlinked).
          */
         export type transformSharedStation = {
-            /** See {@link PAPIRequests.user.getStationList user.getStationList} */
+            /** See {@link PReq.user.getStationList user.getStationList} */
             stationToken: string
         } & PandoraRequestData;
         /** Shares a station with specified email addresses. */
@@ -648,7 +652,7 @@ export namespace PAPIRequests {
             emails: string[]
         } & PandoraRequestData;
         /**
-         * See {@link PAPIRequests.user.getStationListChecksum user.getStationListChecksum}
+         * See {@link PReq.user.getStationListChecksum user.getStationListChecksum}
          */
         export type getGenreStationsChecksum = {
             /**
@@ -665,12 +669,12 @@ export namespace PAPIRequests {
         export type getGenreStations = PandoraRequestData;
         /**
          * Feedback added by
-         * {@link PAPIRequests.station.addFeedback station.addFeedback}
+         * {@link PReq.station.addFeedback station.addFeedback}
          * can be removed from the station.
          */
         export type deleteFeedback = {
             /** 
-             * See {@link PAPIRequests.station.getStation station.getStation}
+             * See {@link PReq.station.getStation station.getStation}
              */
             feedbackId: string
         } & PandoraRequestData;
@@ -678,7 +682,7 @@ export namespace PAPIRequests {
         export type getStation = {
             /**
              * Existing station, see
-             * {@link PAPIRequests.user.getStationList user.getStationList}
+             * {@link PReq.user.getStationList user.getStationList}
              */
             stationToken: string,
             includeExtendedAttributes: boolean
@@ -687,7 +691,7 @@ export namespace PAPIRequests {
         export type deleteStation = {
             /**
              * Existing station, see
-             * {@link PAPIRequests.user.getStationList user.getStationList}
+             * {@link PReq.user.getStationList user.getStationList}
              */
             stationToken: string
         } & PandoraRequestData;
@@ -695,7 +699,7 @@ export namespace PAPIRequests {
         export type renameStation = {
             /**
              * Existing station, see
-             * {@link PAPIRequests.user.getStationList user.getStationList}
+             * {@link PReq.user.getStationList user.getStationList}
              */
             stationToken: string,
             /**
@@ -709,33 +713,33 @@ export namespace PAPIRequests {
         export type deleteMusic = {
             /**
              * See
-             * {@link PAPIRequests.station.getStation station.getStation}
+             * {@link PReq.station.getStation station.getStation}
              * and
-             * {@link PAPIRequests.station.addSeed station.addSeed}
+             * {@link PReq.station.addSeed station.addSeed}
              */
             seedId: string
         } & PandoraRequestData;
         /**
-         * {@link PAPIRequests.music.search music.search}
+         * {@link PReq.music.search music.search}
          * results can be used to add new seeds to an existing station.
          */
         export type addSeed = {
             /**
-             * Existing station, see {@link PAPIRequests.user.getStationList}
+             * Existing station, see {@link PReq.user.getStationList}
              */
             stationToken: string,
 
             /**
-             * Obtained via {@link PAPIRequests.music.search music.search}
+             * Obtained via {@link PReq.music.search music.search}
              */
             musicToken: string
         } & PandoraRequestData;
         /**
          * Stations can either be created with a musicToken
          * obtained by Search
-         * ({@link PAPIRequests.music.search music.search}) 
+         * ({@link PReq.music.search music.search}) 
          * or trackToken from playlists
-         * ({@link PAPIRequests.station.getPlaylist station.getPlaylist}).
+         * ({@link PReq.station.getPlaylist station.getPlaylist}).
          * 
          * The latter needs a musicType to specify whether
          * the track itself or its artist should be used as seed.
@@ -758,7 +762,7 @@ export namespace PAPIRequests {
         export type getPlaylist = {
             /**
              * Station token from
-             * {@link PAPIRequests.user.getStationList user.getStationList}
+             * {@link PReq.user.getStationList user.getStationList}
              */
             stationToken: string,
             /**
@@ -787,7 +791,7 @@ export namespace PAPIRequests {
          */
         export type addFeedback = {
             /**
-             * Obtained via `{@link PAPIRequests.user.getStationList user.getStationList}`
+             * Obtained via `{@link PReq.user.getStationList user.getStationList}`
              */
             stationToken: string
             trackToken: string
@@ -890,7 +894,7 @@ export namespace PAPIRequests {
         export type getStationListChecksum = PandoraRequestData;
         export type setQuickMix = {
             /** 
-             * List of station ids (see {@link PAPIRequests.user.getStationList user.getStationList})
+             * List of station ids (see {@link PReq.user.getStationList user.getStationList})
             */
              quickMixStationIds: string[]
         } & PandoraRequestData;
@@ -898,7 +902,7 @@ export namespace PAPIRequests {
          * A song can be banned from _all stations_ temporarily (one month).
          */
         export type sleepSong = {
-            /** See {@link PAPIRequests.station.getPlaylist station.getPlaylist} */
+            /** See {@link PReq.station.getPlaylist station.getPlaylist} */
             trackToken: string
         } & PandoraRequestData;
         /**
@@ -910,7 +914,7 @@ export namespace PAPIRequests {
     export namespace test {
         /**
          * Check whether Pandora is available in the connecting client’s country,
-         * based on geoip database. This is not strictly required since {@link PAPIRequests.auth.partnerLogin Partner login}
+         * based on geoip database. This is not strictly required since {@link PReq.auth.partnerLogin Partner login}
          * enforces this restriction.
          * 
          * This request has no parameters,
@@ -952,7 +956,7 @@ export namespace PAPIRequests {
             loginType: "user",
             /**
              * Username. To validate whether this is correct or unique, use
-             * {@link PAPIRequests.user.validateUsername user.validateUsername}
+             * {@link PReq.user.validateUsername user.validateUsername}
              */
             username: string,
             /**
@@ -962,7 +966,7 @@ export namespace PAPIRequests {
             /**
              * Partner token obtained by Partner Login
              * 
-             * See {@link PAPIRequests.auth.partnerLogin auth.partnerLogin}
+             * See {@link PReq.auth.partnerLogin auth.partnerLogin}
              */
             partnerAuthToken: string,
 
@@ -975,7 +979,7 @@ export namespace PAPIRequests {
 
             /**
              * Return station list, see 
-             * {@link PAPIRequests.user.getStationList user.getStationList}
+             * {@link PReq.user.getStationList user.getStationList}
              */
             returnStationList?: boolean,
             includeStationArtUrl?: boolean,
@@ -1007,7 +1011,7 @@ export namespace PAPIRequests {
          * Get (incomplete) list of attributes assigned to song by Music Genome Project.
          */
         export type explainTrack = {
-            /** See {@link PAPIRequests.station.getPlaylist station.getPlaylist} */
+            /** See {@link PReq.station.getPlaylist station.getPlaylist} */
             trackToken: string
         } & PandoraRequestData;
     }
@@ -1080,8 +1084,8 @@ export enum PAPI_ERRORS {
 
     /**
      * Occurs with
-     * {@link PAPIRequests.auth.partnerLogin auth.partnerLogin} and 
-     * {@link PAPIRequests.auth.userLogin auth.userLogin}.
+     * {@link PReq.auth.partnerLogin auth.partnerLogin} and 
+     * {@link PReq.auth.userLogin auth.userLogin}.
      */
     INVALID_PARTNER_LOGIN = 1002,
 
@@ -1128,7 +1132,7 @@ export enum PAPI_ERRORS {
     INVALID_COUNTRY_CODE = 1027,
     INVALID_GENDER = 1027,
     /**
-     * Occurs with {@link PAPIRequests.station.deleteMusic station.deleteMusic}
+     * Occurs with {@link PReq.station.deleteMusic station.deleteMusic}
      * when you try to remove the last seed of a station,
      * as they require at least one seed to function.
      */

@@ -1,11 +1,13 @@
+// @ts-nocheck This file is kept as reference only and will be deleted soon.
+
 /*globals is_android stationImgs, encrypt, decrypt, currentSong, play, prevSongs, comingSong*/
 /*exported addFeedback, addFeedbackFromToken explainTrack, search, createStation, sleepSong, setQuickMix, deleteStation */
 
 "use strict";
 
-import { encrypt } from "./crypt";
-import { LinkishString, NumberishString, PandoraRequestData, PAPIRequests, PandoraResponseData, PAPIResponses, PandoraSong, PAPIError, Response } from "./pandora";
-import { formatParameters, formatStr } from "./util";
+import { decrypt, encrypt } from "./crypt";
+import { LinkishString, NumberishString, PandoraRequestData, PReq, PandoraResponseData, PRes, PandoraSong, PAPIError, PandoraResponse, ResponseOK } from "./pandora";
+import { formatParameters, formatStr, stringToBytes } from "./util";
 
 let clientStartTime = 0;
 let syncTime = 0;
@@ -22,12 +24,12 @@ function getSyncTime(syncTime: NumberishString | number) {
 }
 
 let lastRequestFailed = false;
-async function sendRequest(
+async function sendRequest<t>(
         secure: boolean, 
         encrypted: boolean, 
         method: string, 
         request: PandoraRequestData
-    ) {
+    ): Promise<ResponseOK<t>> {
     
     let url = `http${
             localStorage.forceSecure === "true" || secure ? "s" : ""
@@ -62,12 +64,18 @@ async function sendRequest(
         body: new_request
     });
 
-    let responseData: Response<unknown> = await response.json();
+    let responseData: PandoraResponse<t> = await response.json();
 
     if (responseData.stat === "fail") {
         if (responseData.code === 1001 && !lastRequestFailed) {
-                await partnerLogin();
-                lastRequestFailed = true;
+            lastRequestFailed = true;
+            try {
+                let details = await partnerLogin();
+                await userLogin(details);
+            } catch(e) {
+                throw new PAPIError(responseData);
+            }
+            return await sendRequest<t>(secure, encrypted, method, request);
         } else {
             throw new PAPIError(responseData);
         }
@@ -77,10 +85,10 @@ async function sendRequest(
 
 
 async function getStationList() {
-    let request: PAPIRequests.user.getStationList = {
+    let request: PReq.user.getStationList = {
         includeStationArtUrl: true
     };
-    let response: Response<PAPIResponses.user.getStationList>;
+    let response: PandoraResponse<PRes.user.getStationList>;
     
     try {
         response = await sendRequest(false, true, "user.getStationList", request);
@@ -108,7 +116,7 @@ async function getStationList() {
 //login info so we can know that un/pw is bad before assuming it is.
 //seems error 1002 is bad login info.
 
-async function userLogin(response) {
+async function userLogin(response: ResponseOK<PRes.auth.partnerLogin>) {
     partnerId = response.result.partnerId;
     if (localStorage.username === undefined || localStorage.password === undefined) {
         return;
@@ -143,16 +151,21 @@ async function userLogin(response) {
 }
 
 
-async function partnerLogin(level = 0) {
+async function partnerLogin(level = 0): Promise<ResponseOK<PRes.auth.partnerLogin>> {
     if (localStorage.username !== "" && localStorage.password !== "") {
-        let request = {
-            "username": "android",
-            "password": "AC7IBG09A3DTSYM4R41UJWL07VLN8JI7",
-            "version": "5",
-            "deviceModel": "android-generic",
-            "includeUrls": true
+        let request: PReq.auth.partnerLogin = {
+            username: "android",
+            password: "AC7IBG09A3DTSYM4R41UJWL07VLN8JI7",
+            version: "5",
+            deviceModel: "android-generic",
+            includeUrls: true
         };
-        let response = await sendRequest(true, false, "auth.partnerLogin", request);
+        let response: ResponseOK<PRes.auth.partnerLogin>;
+        try {
+            response = await sendRequest<PRes.auth.partnerLogin>(true, false, "auth.partnerLogin", request);
+        } catch(e) {
+            throw e;
+        }
         let b = stringToBytes(decrypt(response.result.syncTime));
         // skip 4 bytes of garbage
         let s = "", i;
@@ -161,7 +174,7 @@ async function partnerLogin(level = 0) {
         }
         syncTime = parseInt(s);
         clientStartTime = parseInt((new Date().getTime() + "").substr(0, 10));
-        return await userLogin(response);
+        return response;
     }
 }
 

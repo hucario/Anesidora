@@ -1,16 +1,4 @@
 /**
- * @link https://stackoverflow.com/questions/610406/javascript-equivalent-to-printf-string-format#4673436
- */
-
-export function formatStr(str: string, ...replace: string[]) {
-    return str.replace(/{(\d+)}/g, function(match, number) {
-        return replace[number] !== undefined
-            ? replace[number]
-            : match;
-    });
-}
-
-/**
  * @link http://stackoverflow.com/questions/1240408/reading-bytes-from-a-javascript-string
  */
 export function stringToBytes(str: string) {
@@ -40,16 +28,12 @@ export function formatParameters(parameterObject: {
     for(let key in parameterObject) {
         let value = parameterObject[key];
         if (value.length > 0) {
-            params.push(formatStr("{0}={1}", key, value));
+            params.push(
+                `${key}=${encodeURIComponent(value)}`
+            );
         } else {
             params.push(key);
         }
     }
     return params.join("&");
-}
-
-export type PandoraAccount = {
-    email: string,
-    password: string,
-    icon: string
 }

@@ -2,7 +2,7 @@
     "compilerOptions": {
         "sourceRoot": "./src",
         "sourceMap": true,
-        "target": "es6",
+        "target": "esnext",
         "outDir": "build"
     },
     "include": [
