@@ -4,14 +4,21 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build_chrome_unpacked",
+            "label": "Copy non-ts files (chrome, unpacked)",
             "type": "shell",
-            "command": "./unpacked_chrome.bat",
+            "command": "node build.js chrome chrome_build norm-nocompile",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
                 "isDefault": true
             }
+        },
+        {
+            "label": "Compile & Copy (chrome, unpacked)",
+            "type": "shell",
+            "command": "node build.js chrome chrome_build",
+            "problemMatcher": [],
+            "group": "none"
         }
     ]
 }

@@ -3,7 +3,9 @@
         "sourceRoot": "./src",
         "sourceMap": true,
         "target": "esnext",
-        "outDir": "build"
+        "outDir": "build",
+        "module": "esnext",
+        "moduleResolution": "Node"
     },
     "include": [
         "src/**/*"

@@ -2,7 +2,7 @@
   "name": "anesidora",
   "version": "2.2.2",
   "description": "An alternate Pandora client, in the form of a browser extension.",
-  "main": "./build.js",
+  "main": "./build.js chrome",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -11,12 +11,15 @@
     "url": "git+https://github.com/hucario/Anesidora.git"
   },
   "author": "",
-  "license": "ISC",
+  "license": "GPL",
   "bugs": {
     "url": "https://github.com/hucario/Anesidora/issues"
   },
   "homepage": "https://github.com/hucario/Anesidora#readme",
   "dependencies": {
     "typescript": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.9"
   }
 }

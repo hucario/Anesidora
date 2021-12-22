@@ -1,12 +1,12 @@
 {
     "manifest_version": 2,
     "background": {
-        "page":"background.htm"
+        "page":"background/background.html"
     },
     "browser_action": {
         "default_icon": "images/anesidora-debug-128.png",
         "browser_style": true,
-        "default_popup": "popup.htm"
+        "default_popup": "player/player.html"
     },
     "description": "Tabs? Where we're listening, we don't need tabs.",
     "icons": {
@@ -19,7 +19,7 @@
         "keyword": "radio"
     },
     "homepage_url": "http://github.com/pvrs12/anesidora",
-    "options_page": "options.htm",
+    "options_page": "settings/settings.html",
     "permissions": [
         "webRequest",
         "webRequestBlocking",
@@ -43,7 +43,7 @@
     },
     "version": "2.2.2",
     "options_ui": {
-        "page": "options.htm",
-        "chrome_style": true
+        "page": "settings/settings.html",
+        "chrome_style": false
     }
 }
