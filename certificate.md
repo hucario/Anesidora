@@ -8,7 +8,7 @@ It appears that the HTTPS certificate for `tuner.pandora.com` has been [distrust
 * Navigate to https://tuner.pandora.com
 * Notice that you are prevented from proceeding and the red warning in the address bar
 * Click `Advanced`
-    * If using Firefox, Click `Add Exception...` then click `Confirm Security Exception`
-    * If using Chrome, Click `Proceed to tuner.pandora.com (unsafe)`
+	* If using Firefox, Click `Add Exception...` then click `Confirm Security Exception`
+	* If using Chrome, Click `Proceed to tuner.pandora.com (unsafe)`
 * You should see a page which says `Forbidden`. This is fine
 * Anesidora should now work

@@ -1,13 +1,13 @@
 {
-    "compilerOptions": {
-        "sourceRoot": "./src",
-        "sourceMap": true,
-        "target": "esnext",
-        "outDir": "build",
-        "module": "esnext",
-        "moduleResolution": "Node"
-    },
-    "include": [
-        "src/**/*"
-    ]
+	"compilerOptions": {
+		"sourceRoot": "./src",
+		"sourceMap": true,
+		"target": "esnext",
+		"outDir": "build",
+		"module": "esnext",
+		"moduleResolution": "Node"
+	},
+	"include": [
+		"src/**/*"
+	]
 }
