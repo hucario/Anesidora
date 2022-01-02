@@ -680,9 +680,7 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 
 			let res: 'failed' | PandoraRating;
 			try {
-//				res = await setFeedback(message.data.stationToken, message.data.trackToken, message.data.rating);
-				res = message.data.rating;
-				await new Promise((res) => setTimeout(res, 5000));
+				res = await setFeedback(message.data.stationToken, message.data.trackToken, message.data.rating);
 			} finally {
 				if (res === 'failed') {
 					return;
