@@ -18,8 +18,28 @@ export type ToTabsMessages = {
 	QueueYeeted |
 	SeekBarAck |
 	BookmarksUpdated |
-	StationsUpdated
+	StationsUpdated |
+	SettingFeedback |
+	FeedbackSet
 )
+
+type SettingFeedback = {
+	name: "toTabs_settingFeedback",
+	data: {
+		trackToken: string,
+		stationToken: string,
+		rating: PandoraRating
+	}
+}
+
+type FeedbackSet = {
+	name: "toTabs_feedbackSet",
+	data: {
+		trackToken: string,
+		stationToken: string,
+		rating: PandoraRating
+	}
+}
 
 type StationsUpdated = {
 	name: "toTabs_stationsUpdated",
@@ -133,10 +153,12 @@ export type Cover_PlayButtonPressResponse = never;
 type SetFeedback = {
 	name: "toBg_setFeedback",
 	data: {
-		token: string,
+		trackToken: string,
+		stationToken: string,
 		rating: PandoraRating
 	}
 }
+export type SetFeedbackresponse = never;
 
 type QueueYeet = {
 	name: "toBg_removeFromQueue",

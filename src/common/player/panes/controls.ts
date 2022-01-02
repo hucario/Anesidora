@@ -108,7 +108,7 @@ const getControlsPaneHtml = (s: AnesidoraState) => (`
 			s.currentEvent ? '' :
 			'ct_nothingPlaying'
 		}">
-			<button>
+			<button id="ct_likeCurrent">
 				<i class='bx bx${
 					s.currentEvent && 'songRating' in s.currentEvent && 
 					s.currentEvent.songRating === PandoraRating.THUMBS_UP ? 
@@ -124,7 +124,7 @@ const getControlsPaneHtml = (s: AnesidoraState) => (`
 			<a tabindex="0" href="../settings/settings.html" target="_blank">
 				<i class='bx bx-cog'></i>
 			</a>
-			<button>
+			<button id="ct_dislikeCurrent">
 				<i class='bx bx-dislike'></i>
 			</button>
 		</div>
@@ -205,6 +205,36 @@ export default async function SetupControlsPane(
 	.querySelector<HTMLButtonElement>('.ct_musicInfo > div > :nth-child(2)');
 
 	skipButton.addEventListener('click', () => message("toBg_skipButton"));
+
+	let likeButton = ctNodes.querySelector<HTMLButtonElement>('#ct_likeCurrent');
+	let dislikeButton = ctNodes.querySelector<HTMLButtonElement>('#ct_dislikeCurrent');
+
+	likeButton.addEventListener('click', () => {
+		if (
+			state.currentStation &&
+			state.currentEvent &&
+			'trackToken' in state.currentEvent
+		) {
+			message("toBg_setFeedback", {
+				stationToken: state.currentStation,
+				trackToken: state.currentEvent.trackToken,
+				rating: PandoraRating.THUMBS_UP
+			})
+		}
+	});
+	dislikeButton.addEventListener('click', () => {
+		if (
+			state.currentStation &&
+			state.currentEvent &&
+			'trackToken' in state.currentEvent
+		) {
+			message("toBg_setFeedback", {
+				stationToken: state.currentStation,
+				trackToken: state.currentEvent.trackToken,
+				rating: PandoraRating.THUMBS_DOWN
+			})
+		}
+	});
 
 	subscribe("toTabs_seekBarAck", (reply) => {
 		if (reply.name !== "toTabs_seekBarAck") {
@@ -433,6 +463,78 @@ export default async function SetupControlsPane(
 		}
 	});
 
+	subscribe("toTabs_settingFeedback", msg => {
+		if (msg.name !== 'toTabs_settingFeedback') {
+			return;
+		}
+
+		if (
+			state.currentEvent &&
+			'trackToken' in state.currentEvent &&
+			state.currentEvent.trackToken === msg.data.trackToken &&
+			state.currentStation === msg.data.stationToken
+		) {
+			if (msg.data.rating === PandoraRating.THUMBS_UP) {
+				likeButton.classList.add('activeButton');
+			} else if (msg.data.rating === PandoraRating.THUMBS_DOWN) {
+				dislikeButton.classList.add('activeButton');
+			}
+		}
+
+		let elems = ratingButtons[msg.data.stationToken + msg.data.trackToken]
+		if (elems) {
+			if (document.contains(elems.likeButton)) {
+				if (msg.data.rating === PandoraRating.THUMBS_UP) {
+					elems.likeButton.classList.add('activeButton')
+				} else if (msg.data.rating === PandoraRating.THUMBS_DOWN) {
+					elems.dislikeButton.classList.add('activeButton');
+				}
+			} else {
+				delete ratingButtons[msg.data.stationToken + msg.data.trackToken];
+			}
+		}
+	})
+
+	subscribe("toTabs_feedbackSet", msg => {
+		if (msg.name !== 'toTabs_feedbackSet') {
+			return;
+		}
+
+		if (
+			state.currentEvent &&
+			'trackToken' in state.currentEvent &&
+			state.currentEvent.trackToken === msg.data.trackToken &&
+			state.currentStation === msg.data.stationToken
+		) {
+			if (msg.data.rating === PandoraRating.THUMBS_UP) {
+				likeButton.classList.remove('activeButton');
+				likeButton.children[0].className = "bx bxs-like";
+				dislikeButton.children[0].className = "bx bx-dislike";
+			} else if (msg.data.rating === PandoraRating.THUMBS_DOWN) {
+				dislikeButton.classList.remove('activeButton');
+				likeButton.children[0].className = "bx bx-like";
+				dislikeButton.children[0].className = "bx bxs-dislike";
+			}
+		}
+
+		let elems = ratingButtons[msg.data.stationToken + msg.data.trackToken]
+		if (elems) {
+			if (document.contains(elems.likeButton)) {
+				if (msg.data.rating === PandoraRating.THUMBS_UP) {
+					elems.likeButton.classList.remove('activeButton');
+					elems.likeButton.children[0].className = "bx bxs-like";
+					elems.dislikeButton.children[0].className = "bx bx-dislike";
+				} else if (msg.data.rating === PandoraRating.THUMBS_DOWN) {
+					elems.dislikeButton.classList.remove('activeButton');
+					elems.likeButton.children[0].className = "bx bx-like";
+					elems.dislikeButton.children[0].className = "bx bxs-dislike";
+				}
+			} else {
+				delete ratingButtons[msg.data.stationToken + msg.data.trackToken];
+			}
+		}
+	})
+
 	subscribe("toTabs_configChanged", (reply) => {
 		if (reply.name !== 'toTabs_configChanged') {
 			return;
@@ -574,6 +676,13 @@ export default async function SetupControlsPane(
 	return ctNodes;
 }
 
+const ratingButtons: {
+	[key: string]: {
+		likeButton: HTMLElement,
+		dislikeButton: HTMLElement
+	}
+} = {}
+
 // ANCHOR cover html
 const genCover = (
 	e: PandoraSong | PopulatedPandoraAd | UnpopulatedPandoraAd,
@@ -659,7 +768,8 @@ const genCover = (
 </div>
 	`)[0];
 
-	const token = 'trackToken' in e ? e.trackToken : e.adToken;
+	const trackToken = 'trackToken' in e ? e.trackToken : e.adToken;
+	const stationToken = state.currentStation;
 
 	const likeButton = nodes
 	.querySelector<HTMLButtonElement>('.ct_coverLike');
@@ -670,20 +780,40 @@ const genCover = (
 	const playButton = nodes
 	.querySelector<HTMLButtonElement>('.ct_playCover');
 
-	playButton?.addEventListener('click', () => message("toBg_coverPlayButtonPress", token))
-	removeButton?.addEventListener('click', () => message("toBg_removeFromQueue", token))
+	playButton?.addEventListener('click', () => message("toBg_coverPlayButtonPress", trackToken))
+	removeButton?.addEventListener('click', () => message("toBg_removeFromQueue", trackToken))
 	likeButton?.addEventListener("click", () => {
 		message("toBg_setFeedback", {
-			token,
+			trackToken,
+			stationToken,
 			rating: PandoraRating.THUMBS_UP
 		});
 	})
 	dislikeButton?.addEventListener("click", () => {
 		message("toBg_setFeedback", {
-			token,
+			trackToken,
+			stationToken,
 			rating: PandoraRating.THUMBS_DOWN
 		});
 	})
+
+	if (likeButton && dislikeButton) {
+		ratingButtons[stationToken + trackToken] = {
+			likeButton,
+			dislikeButton
+		}
+	}
+
+	if ('adToken' in e || 'trackToken' in e) {
+		generatedCovers[
+			'adToken' in e ? 
+				e.adToken : 
+				('trackToken' in e ?
+					e.trackToken :
+					''
+				)
+		] = nodes;
+	}
 
 	return nodes;
 }
@@ -850,6 +980,10 @@ function buildPane(
 	return ctNodes;
 }
 
+const generatedCovers: {
+	[key: string]: HTMLElement
+} = {}
+
 function updateCovers(
 	covers: HTMLDivElement,
 	config: AnesidoraConfig,
@@ -872,14 +1006,14 @@ function updateCovers(
 	feed.forEach((song, i) => {
 		let elem: HTMLElement;
 		const where = (i - prevSongsLength);
-		const oldElem = children.find(e => ((
+		const oldElem = generatedCovers[
 			'adToken' in song ? 
-				song.adToken === e.id : 
+				song.adToken : 
 				('trackToken' in song ?
-					song.trackToken === e.id :
-					false
+					song.trackToken :
+					''
 				)
-		)));
+		];
 		if (oldElem) {
 			elem = oldElem;
 		}
@@ -930,11 +1064,14 @@ function updateCovers(
 				e.trackToken :
 				false
 			)
-	)).filter(e => !!e);
+	));
 	const toRemove = children.filter(e => !feedIds.includes(e.id) && e.classList.contains('ct_cover'));
 	toRemove.forEach(e => {
 		covers.scrollLeft -= e.clientWidth;
 		e.parentElement && e.parentElement.removeChild(e);
+		if (generatedCovers[e.id]) {
+			delete generatedCovers[e.id]
+		}
 	});
 
 	if (config.controlsPane.autoScroll && covers.querySelector(".ct_current")) {

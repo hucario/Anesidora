@@ -566,7 +566,39 @@ async function getStations(force=false): Promise<PandoraStation[]> {
 	}
 }
 
-
+/**
+ * Sends a request to Pandora to dis/like a song.
+ * @param stationToken The station to dis/like on. 
+ * @param trackToken The song to dis/like.
+ * @param rating What to rate.
+ */
+async function setFeedback(
+	stationToken: string,
+	trackToken: string,
+	rating: PandoraRating
+): Promise<"failed" | PandoraRating> {
+	if (rating === PandoraRating.UNRATED || !PandoraRating[rating]) {
+		logHere(`Invalid rating ${rating}. Must be ${PandoraRating.THUMBS_DOWN} or ${PandoraRating.THUMBS_UP}`);
+		return 'failed';
+	}
+	try {
+		let res = await sendRequest<PRes.station.addFeedback>(
+			'station.addFeedback',
+			<PReq.station.addFeedback>{
+				stationToken,
+				trackToken,
+				isPositive: rating === PandoraRating.THUMBS_UP
+			}
+		);
+		return (res.result.isPositive ?
+			PandoraRating.THUMBS_UP :
+			PandoraRating.THUMBS_DOWN
+		)
+	} catch(e) {
+		errorHere(`station.addFeedback: `, new PAPIError(e))
+		return 'failed';
+	}
+}
 
 // ANCHOR Misc listeners
 UA.runtime.onMessage.addListener(
@@ -644,6 +676,24 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 			return;
 
 		case 'toBg_setFeedback':
+			messageTabs('toTabs_settingFeedback', message.data);
+
+			let res: 'failed' | PandoraRating;
+			try {
+//				res = await setFeedback(message.data.stationToken, message.data.trackToken, message.data.rating);
+				res = message.data.rating;
+				await new Promise((res) => setTimeout(res, 5000));
+			} finally {
+				if (res === 'failed') {
+					return;
+				}
+				messageTabs('toTabs_feedbackSet', {
+					trackToken: message.data.trackToken,
+					stationToken: message.data.stationToken,
+					rating: res
+				});
+			}
+			return;
 		case 'toBg_skipButton':
 		case 'toBg_playStation':
 			logHere(`Handled unhandled ${message.name}`)
