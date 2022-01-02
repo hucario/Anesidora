@@ -19,9 +19,14 @@ export async function isAndroid(): Promise<boolean> {
 	if (c_IsAndroid) {
 		return c_IsAndroid; 
 	}
-
-	const platform = await getBrowser().runtime.getPlatformInfo();
-	c_IsAndroid = (platform.os === "android");
+	if (ua === "firefox") {		
+		const platform = await getBrowser().runtime.getPlatformInfo();
+		c_IsAndroid = (platform.os === "android");
+	} else {
+		getBrowser().runtime.getPlatformInfo(platform => {
+			c_IsAndroid = (platform.os === "android");
+		})
+	}
 
 	return c_IsAndroid;
 }

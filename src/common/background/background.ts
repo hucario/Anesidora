@@ -50,7 +50,7 @@ window.debugRequests = false;
 // ANCHOR Imports, typedefs, constants, util funcs
 
 import * as store from './store.js';
-import { getBrowser } from './platform_specific.js'
+import { getBrowser, isAndroid } from './platform_specific.js'
 import { AudioInfo, BASE_API_URL, Bookmarks, LinkishString, NumberishString, PandoraPlaylist, PandoraRating, PandoraRequestData, PandoraResponse, PandoraSong, PandoraStation, PandoraTime, PAPIError, PReq, PRes, ResponseOK } from './pandora.js';
 import { formatParameters, stringToBytes } from './util.js';
 import { decrypt, encrypt } from './crypt.js';
@@ -423,9 +423,6 @@ if (!playerAudio) {
 	throwHere("playerAudio is undefined");
 }
 
-//playerAudio.addEventListener("timeupdate", () => {
-//playerAudio.addEventListener('ended', () => {
-
 const playerState: store.AnesidoraState = {
 	currentEvent: null,
 	eventHistory: [],
@@ -438,6 +435,18 @@ const playerState: store.AnesidoraState = {
 	currentTime: null,
 	duration: null
 }
+
+playerAudio.addEventListener("pause", () => {
+	pause(false);
+})
+playerAudio.addEventListener("play", () => {
+	play(false);
+});
+playerAudio.addEventListener("timeupdate", () => {
+	seekTo(playerAudio.currentTime, false);
+})
+playerAudio.addEventListener("ended", playNextItem);
+playerAudio.addEventListener("error", playNextItem);
 
 function fixArtUrl(artUrl: string | undefined): string {
 	//http://mediaserver-cont-sv5-2-v4v6.pandora.com/images/b0/51/06/96/e5ef40b794ab021bd28d275c/500W_500H.jpg
@@ -527,6 +536,203 @@ async function getPlaylist(token: string, starting: boolean) {
 	}
 }
 
+async function play(actuallyPlay = true) {
+	if (!(playerState.currentStation || playerState.currentEvent)) {
+		return;
+	}
+	if (playerState.isPaused) {
+		if (actuallyPlay) {
+			await playerAudio.play();
+		}
+		messageTabs('toTabs_stateChanged', {
+			key: 'isPaused',
+			oldValue: playerState.isPaused,
+			newValue: false
+		})
+		playerState.isPaused = false;
+		if ('mediaSession' in navigator) {
+			navigator.mediaSession.playbackState = 'playing';
+		}
+		messageTabs('toTabs_resetPlay', false);
+	}
+}
+async function pause(actuallyPause = true) {
+	if (!playerState.isPaused) {
+		if (actuallyPause) {
+			playerAudio.pause();
+		}
+		messageTabs('toTabs_stateChanged', {
+			key: 'isPaused',
+			oldValue: playerState.isPaused,
+			newValue: true
+		})
+		playerState.isPaused = true;
+		if ('mediaSession' in navigator) {
+			navigator.mediaSession.playbackState = 'paused';
+		}
+		messageTabs('toTabs_resetPlay', true);
+	}
+}
+
+async function seekTo(time: number, actuallySeek = true) {
+	try {
+		if (actuallySeek) {	
+			playerAudio.currentTime = time;
+		}
+	} finally {
+		if (!isNaN(playerAudio.currentTime)) {
+			playerState.currentTime = playerAudio.currentTime;
+			messageTabs('toTabs_seekBarAck', playerAudio.currentTime);
+		} else {
+			playerState.currentTime = null;
+		}
+	}
+}
+
+// TODO: AudioSession
+async function updateMediaSession(currSong: PandoraSong) {
+	let metadata = navigator.mediaSession.metadata;
+    
+	if (!metadata || (
+        metadata.title != currSong.songName ||
+        metadata.artist != currSong.artistName ||
+        metadata.artwork[0].src != currSong.albumArtUrl)
+        ) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: currSong.songName,
+            artist: currSong.artistName,
+            artwork: [{ src: currSong.albumArtUrl, sizes: '500x500', type: 'image/jpeg' }]
+        });
+    }
+
+	if (playerAudio.paused) {
+        navigator.mediaSession.playbackState = "paused";
+    } else {
+        navigator.mediaSession.playbackState = "playing";
+
+        if (!isNaN(playerAudio.duration)) {
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: playerAudio.duration,
+                    position: playerAudio.currentTime,
+                    playbackRate: 1
+                });
+            } catch (e) {}
+        }
+    }
+}
+
+async function setupMediaSession() {
+	if (!('mediaSession' in window.navigator)) {
+		return;
+	}
+	navigator.mediaSession.setActionHandler("play", () => {
+		if (playerAudio.paused || playerState.isPaused) {
+			play();
+		} else {
+			// Why is this available?
+			logHere(`Tried to play while already playing.`)
+			messageTabs('toTabs_playButton', false);
+		}
+	})
+	navigator.mediaSession.setActionHandler("pause", () => {
+		if (!(playerAudio.paused || playerState.isPaused)) {
+			pause();
+		} else {
+			logHere(`Tried to pause while already paused.`)
+			messageTabs('toTabs_playButton', true);
+		}
+	})
+	navigator.mediaSession.setActionHandler("seekto", details => seekTo(details.seekTime));
+	navigator.mediaSession.setActionHandler("previoustrack", () => seekTo(0));
+	navigator.mediaSession.setActionHandler("nexttrack", () => playNextItem());
+}
+
+async function playNextItem() {
+	messageTabs('toTabs_skipButton', undefined);
+	if (playerState.currentEvent) {
+		playerState.eventHistory.push(playerState.currentEvent);
+	}
+	playerState.currentEvent = null;
+
+	if (playerState.comingEvents.length === 0 && playerState.currentStation) {
+		playerState.comingEvents = await getPlaylist(playerState.currentStation, false);
+	} else if (playerState.comingEvents.length === 0) {
+		return;
+	}
+	playerState.currentEvent = playerState.comingEvents.shift();
+
+	let currEvent = playerState.currentEvent;
+
+	if ('adToken' in currEvent) {
+		// TODO: Check for whether playing ads, and do so.
+	} else if ('trackToken' in currEvent) {
+		// TODO: Config option for preference on high/med/low quality audio
+		// TODO: Preloading?
+		if (currEvent.additionalAudioUrl) {
+			if (currEvent.additionalAudioUrl instanceof Array) {
+				playerAudio.src = currEvent.additionalAudioUrl[0];
+			} else {
+				playerAudio.src = currEvent.additionalAudioUrl;
+			}
+		} else {
+			playerAudio.src =
+				currEvent.audioUrlMap.highQuality?.audioUrl ??
+				currEvent.audioUrlMap.mediumQuality?.audioUrl ??
+				currEvent.audioUrlMap.lowQuality?.audioUrl;
+		}
+
+		try {
+			await playerAudio.play();
+		} catch(e) {
+			await playNextItem();
+		} finally {
+			updateMediaSession(currEvent);
+			playerState.duration = playerAudio.duration;
+			messageTabs("toTabs_updatedFeed", {
+				history: playerState.eventHistory,
+				curr: playerState.currentEvent,
+				next: playerState.comingEvents,
+				newDuration: playerAudio.duration
+			})
+			messageTabs('toTabs_resetSkip', undefined);
+		}
+	} else {
+		if (currEvent.handledYet) {
+			return await playNextItem();
+		}
+		switch (currEvent.eventType) {
+			case 'stationChange':
+				playStation(currEvent.data)
+				return;
+		}
+	}
+
+}
+
+async function playStation(token: string) {
+	playerState.currentStation = token;
+	store.set('lastUsedStation', token);
+	messageTabs('toTabs_playingStation', token);
+
+	let playlist = await getPlaylist(token, true);
+	playerState.comingEvents = playlist;
+	await playNextItem();
+	playerState.eventHistory.push({
+		isEvent: true,
+		eventType: 'stationChange',
+		handledYet: true,
+		data: token
+	})
+	messageTabs("toTabs_updatedFeed", {
+		history: playerState.eventHistory,
+		curr: playerState.currentEvent,
+		next: playerState.comingEvents,
+		newDuration: playerAudio.duration
+	})
+	messageTabs('toTabs_stationResolved', token);
+}
+
 
 const cachedStations = new TimedCache<string, PandoraStation[]>(1000 * 30);
 
@@ -590,15 +796,44 @@ async function setFeedback(
 				isPositive: rating === PandoraRating.THUMBS_UP
 			}
 		);
-		return (res.result.isPositive ?
+		let asEnum = (res.result.isPositive ?
 			PandoraRating.THUMBS_UP :
 			PandoraRating.THUMBS_DOWN
-		)
+		);
+		function findAndUpdate(e?: store.AnesidoraFeedItem) {
+			if (e && 'trackToken' in e && e.trackToken === trackToken) {
+				e.songRating = asEnum;
+			}
+		}
+
+		playerState.comingEvents.forEach(findAndUpdate);
+		playerState.eventHistory.forEach(findAndUpdate);
+		findAndUpdate(playerState.currentEvent)
+
+		return asEnum;
 	} catch(e) {
 		errorHere(`station.addFeedback: `, new PAPIError(e))
 		return 'failed';
 	}
 }
+
+async function playPauseButton() {
+	if (!playerState.currentStation) {
+		if (store.actualConfig.lastUsedStation) {
+			await playStation(store.actualConfig.lastUsedStation);
+			return;
+		} else {
+			return;
+		}
+	}
+	if (playerState.isPaused) {
+		await play();
+	} else {
+		await pause();
+	}
+}
+// @ts-ignore
+window.playerState = playerState;
 
 // ANCHOR Misc listeners
 UA.runtime.onMessage.addListener(
@@ -628,7 +863,13 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 	}
 	switch (message.name) {
 		case 'toBg_getConfig': 
-			return store.actualConfig;
+			return {
+				...store.actualConfig,
+				accounts: store.actualConfig.accounts.map(e => ({
+					...e,
+					password: "[[ This is not a real password ]]"
+				}))
+			};
 
 		case 'toBg_getState':
 			return playerState;
@@ -642,13 +883,12 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 		case 'toBg_coverPlayButtonPress':
 		case 'toBg_playButton':
 			messageTabs('toTabs_playButton', undefined);
-			await new Promise((res) => setTimeout(res, 2000));
+			await playPauseButton();
 			messageTabs('toTabs_resetPlay', playerState.isPaused);
 			return;
 		
 		case 'toBg_skipButton':
-			messageTabs('toTabs_skipButton', undefined);
-			await new Promise((res) => setTimeout(res, 2000));
+			await playNextItem();
 			messageTabs('toTabs_resetSkip', undefined);
 			return;
 
@@ -668,13 +908,7 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 			return;
 
 		case 'toBg_seekBarDrag':
-			try {
-				playerAudio.currentTime = message.data;
-			} finally {
-				if (!isNaN(playerAudio.currentTime)) {
-					messageTabs('toTabs_seekBarAck', playerAudio.currentTime);
-				}
-			}
+			await seekTo(message.data);
 			return;
 
 		case 'toBg_setFeedback':
@@ -694,10 +928,16 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 				});
 			}
 			return;
-		case 'toBg_skipButton':
+
 		case 'toBg_playStation':
-			logHere(`Handled unhandled ${message.name}`)
+			await playStation(message.data);
 			return;
+
+
+
+
+//			logHere(`Handled unhandled ${message.name}`)
+//			return;
 		
 		default:
 			logHere("Unhandled onMessage: ", message);
@@ -742,6 +982,17 @@ UA.webRequest.onBeforeSendHeaders.addListener(
 
 if (currentAccount) {
 	await loginAndPopulate(currentAccount.email, currentAccount.password);
+}
+setupMediaSession();
+if (!(await isAndroid())) {
+	getBrowser().commands.onCommand.addListener(command => {
+		logHere(`Received command ${command}.`)
+		if (command === "pause_play") {
+			playPauseButton();
+		} else if (command === "skip_song") {
+			playNextItem();
+		}
+	});
 }
 
 /*

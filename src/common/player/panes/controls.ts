@@ -253,16 +253,29 @@ export default async function SetupControlsPane(
 			}
 			return;
 		}
-		timestamp.innerText = getFormattedTime(state.currentTime);
-		timestamp.innerText += state.duration !== null ?
-			' / ' + getFormattedTime(state.duration)
-			: '';
+		if (state.currentTime === 0) {
+			timestamp.innerText = getFormattedTime(state.currentTime);
+			timestamp.innerText += state.duration !== null ?
+				' / ' + getFormattedTime(state.duration)
+				: '';
 
-		seekRange.style.setProperty(
-			'--val',
-			(state.currentTime / state.duration) + ''
-		)	
-		seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = (state.duration / state.currentTime) * 100;
+			seekRange.style.setProperty(
+				'--val',
+				'0'
+			)	
+			seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = 0;
+		} else {
+			timestamp.innerText = getFormattedTime(state.currentTime);
+			timestamp.innerText += state.duration !== null ?
+				' / ' + getFormattedTime(state.duration)
+				: '';
+	
+			seekRange.style.setProperty(
+				'--val',
+				(state.currentTime / state.duration) + ''
+			)	
+			seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = (state.duration / state.currentTime) * 100;
+		}
 	})
 
 	// Play/pause button pressed
@@ -535,6 +548,81 @@ export default async function SetupControlsPane(
 		}
 	})
 
+	subscribe("toTabs_updatedFeed", msg => {
+		if (msg.name !== 'toTabs_updatedFeed') {
+			return;
+		}
+		
+		state.currentEvent = msg.data.curr;
+		state.comingEvents = msg.data.next;
+		state.eventHistory = msg.data.history;
+		state.duration = msg.data.newDuration;
+		state.currentTime = 0;
+
+		timestamp.innerText = getFormattedTime(state.currentTime);
+		timestamp.innerText += state.duration !== null ?
+			' / ' + getFormattedTime(state.duration)
+			: '';
+
+		seekRange.style.setProperty(
+			'--val',
+			'0'
+		)	
+		seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = 0;
+
+		if ('trackToken' in state.currentEvent) {
+			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
+			ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
+			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
+				.innerText = "Play to resume last station";
+			
+			let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
+			let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
+			let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
+
+			artistLink.href = state.currentEvent.artistDetailUrl;
+			artistLink.innerText = state.currentEvent.artistName;
+
+			titleLink.href = state.currentEvent.songDetailUrl;
+			titleLink.innerText = state.currentEvent.songName;
+
+			albumLink.href = state.currentEvent.albumDetailUrl;
+			albumLink.innerText = state.currentEvent.albumName;
+		} else {
+			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "";
+			ctNodes.querySelector(".ct_otherButtons").classList.add("ct_nothingPlaying");
+			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
+				.innerText = "";
+		
+			let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
+			let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
+			let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
+
+			artistLink.href = "";
+			artistLink.innerText = "";
+
+			titleLink.href = "";
+			titleLink.innerText = "";
+
+			albumLink.href = "";
+			albumLink.innerText = "";
+		}
+
+		updateCovers(
+			ctNodes.querySelector("#ct_covers"),
+			config,
+			state,
+			message
+		);
+	})
+
+	subscribe("toTabs_playingStation", reply => {
+		if (reply.name !== 'toTabs_playingStation') {
+			return;
+		}
+		state.currentStation = reply.data;
+	})
+
 	subscribe("toTabs_configChanged", (reply) => {
 		if (reply.name !== 'toTabs_configChanged') {
 			return;
@@ -774,7 +862,7 @@ const genCover = (
 	const likeButton = nodes
 	.querySelector<HTMLButtonElement>('.ct_coverLike');
 	const dislikeButton = nodes
-	.querySelector<HTMLButtonElement>('ct_coverDislike');
+	.querySelector<HTMLButtonElement>('.ct_coverDislike');
 	const removeButton = nodes
 	.querySelector<HTMLButtonElement>('.ct_remove');
 	const playButton = nodes
@@ -919,48 +1007,13 @@ function buildPane(
 	})
 
 	if (!config.theming.controls.singleCoverMode) {
-		let covers = [];
-		let pos = 0;
-		state.eventHistory.forEach((song) => {
-			if ('songName' in song) {
-				let thisCover = genCover(song, {
-					current: false,
-					position: state.eventHistory.length - (++pos)
-				}, config, state, message);
-				covers.push(thisCover);
-			}
+		updateCovers(
+			ctNodes.querySelector('#ct_covers'),
+			config,
+			state,
+			message
+		);
 
-		})
-
-		if (state.currentEvent && 'songName' in state.currentEvent) {
-			let currentCover = genCover(state.currentEvent, {
-				current: true,
-				position: 0
-			}, config, state, message);
-			covers.push(currentCover);
-		}
-
-		let pos2 = 0;
-		state.comingEvents.forEach((song) => {
-			if ('songName' in song) {
-				let thisCover = genCover(song, {
-					current: false,
-					position: pos2++
-				}, config, state, message);
-				covers.push(thisCover);
-			}
-		})
-		
-		let coversNode = ctNodes.querySelector('#ct_covers');
-		covers.forEach(e => coversNode.appendChild(e));
-
-		setTimeout(() => {
-			coversNode.querySelector(".ct_current")?.scrollIntoView({
-				block: "center",
-				behavior: "auto",
-				inline: "center"
-			})
-		}, 100);
 	} else {
 		let coversNode = ctNodes.querySelector('#ct_covers');
 		[...coversNode.children].forEach(e => coversNode.removeChild(e));
@@ -1002,10 +1055,9 @@ function updateCovers(
 		...playerState.comingEvents
 	].filter(e => !!e); // if currentSong is undefined, pop it
 
-	const prevSongsLength = playerState.eventHistory.filter(e => 'trackToken' in e).length;
 	feed.forEach((song, i) => {
 		let elem: HTMLElement;
-		const where = (i - prevSongsLength);
+		const where = (i - playerState.eventHistory.length);
 		const oldElem = generatedCovers[
 			'adToken' in song ? 
 				song.adToken : 
@@ -1017,44 +1069,60 @@ function updateCovers(
 		if (oldElem) {
 			elem = oldElem;
 		}
-		if (!elem && 'trackToken' in song) {
-			elem = genCover(song, {
-				position: where,
-				current: where === 0
-			}, config, playerState, message);
-			covers.appendChild(elem);
-		} else if ('trackToken' in song) {
-			elem.querySelector<HTMLElement>(".ct_position").innerText = (
-				where > 0 ? (
-					where === 1 ?
-						"Next song" :
-						`Coming in ${where} songs`
-				) : (
-					where === 0 ?
-						"Previous song" :
-						`${(where) * -1} songs ago`
-				)
-			);
-			elem.setAttribute("data-where", where + '');
-			if (where < 0) {
-				let remB = elem.querySelector<HTMLButtonElement>('.ct_remove');
-				if (remB) {
-					remB.parentElement.removeChild(remB);
+		if (!elem) {
+			if ('trackToken' in song) {
+				elem = genCover(song, {
+					position: where,
+					current: where === 0
+				}, config, playerState, message);
+				covers.appendChild(elem);	
+			} else if ('adToken' in song) {
+				// TODO: Ad representations?
+			} else if ('eventType' in song) {
+				switch (song.eventType) {
+					case 'stationChange':
+						// TODO: Options for different stationchange indicators?
+						elem = strToHtml(`
+							<div class="ct_stationChangeIndicator" id="${song.data}">
+								Station change
+							</div>
+						`)[0]
+						covers.appendChild(elem);
+						break;
 				}
 			}
 		} else {
-			// Update
+			if ('trackToken' in song) {
+				elem.querySelector<HTMLElement>(".ct_position").innerText = (
+					where > 0 ? (
+						where === 1 ?
+							"Next song" :
+							`Coming in ${where} songs`
+					) : (
+						where === -1 ?
+							"Previous song" :
+							`${(where) * -1} songs ago`
+					)
+				);
+				elem.setAttribute("data-where", where + '');
+				if (where < 0) {
+					let remB = elem.querySelector<HTMLButtonElement>('.ct_remove');
+					if (remB) {
+						remB.parentElement.removeChild(remB);
+					}
+				}
+			}
 		}
 
 		if (where === 0) {
-			elem.classList.add("ct_current");
+			elem?.classList.add("ct_current");
 		} else {
-			elem.classList.remove("ct_current");
+			elem?.classList.remove("ct_current");
 		}
 		if (where > 0) {
-			elem.classList.add("ct_leftAlign");
+			elem?.classList.add("ct_leftAlign");
 		} else {
-			elem.classList.remove("ct_leftAlign");
+			elem?.classList.remove("ct_leftAlign");
 		}
 	});
 	const feedIds = feed.map(e => (
@@ -1082,7 +1150,7 @@ function updateCovers(
 		ignoreAutoScroll = true;
 		setTimeout(() => {
 			ignoreAutoScroll = true;
-			covers.querySelector(".ct_current").scrollIntoView({
+			covers.querySelector(".ct_current")?.scrollIntoView({
 				behavior: "smooth",
 				block: "center",
 				inline: "center"
@@ -1090,7 +1158,7 @@ function updateCovers(
 		}, 100);
 		setTimeout(() => {
 			ignoreAutoScroll = true;
-			covers.querySelector(".ct_current").scrollIntoView({
+			covers.querySelector(".ct_current")?.scrollIntoView({
 				behavior: "smooth",
 				block: "center",
 				inline: "center"

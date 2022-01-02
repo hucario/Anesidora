@@ -26,15 +26,20 @@ const ANESIDORA_NAMESPACE = "anesidoraSettings";
 export type AnesidoraFeedItem = PandoraSong | UnpopulatedPandoraAd | PopulatedPandoraAd | AnesidoraEvent;
 
 
-export type EventNames = "stationChange";
-
 export type AnesidoraEvent = (
 	{
 		isEvent: true,
-		eventType: EventNames,
-		handledYet: boolean
-	}
+		eventType: string,
+		handledYet: boolean,
+		data?: unknown
+	} & StationChangeEvent
 );
+
+type StationChangeEvent = {
+	eventType: "stationChange",
+	/** Token */
+	data: string
+}
 
 
 

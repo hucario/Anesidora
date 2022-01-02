@@ -1,5 +1,5 @@
 import { Bookmarks, PandoraRating, PandoraSong, PandoraStation } from "./background/pandora.js"
-import { AnesidoraConfig, ConfigListenerData, AnesidoraState } from "./background/store.js"
+import { AnesidoraConfig, ConfigListenerData, AnesidoraState, AnesidoraFeedItem } from "./background/store.js"
 
 export type Message = ToTabsMessages | ToBgMessages;
 
@@ -20,8 +20,33 @@ export type ToTabsMessages = {
 	BookmarksUpdated |
 	StationsUpdated |
 	SettingFeedback |
-	FeedbackSet
+	FeedbackSet |
+	StationStartingPlaying |
+	StationResolved |
+	UpdatedFeed
 )
+
+type UpdatedFeed = {
+	name: "toTabs_updatedFeed",
+	data: {
+		history: AnesidoraFeedItem[],
+		curr: AnesidoraFeedItem,
+		next: AnesidoraFeedItem[],
+		newDuration: number
+	}
+}
+
+type StationResolved = {
+	name: "toTabs_stationResolved",
+	/** Token */
+	data: string
+}
+
+type StationStartingPlaying = {
+	name: "toTabs_playingStation",
+	/** Token */
+	data: string
+}
 
 type SettingFeedback = {
 	name: "toTabs_settingFeedback",

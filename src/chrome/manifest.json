@@ -30,10 +30,14 @@
 	],
 	"commands": {
 		"pause_play": {
-			"description": "Play/Pause the current song"
+			"description": "Play/Pause the current song",
+			"suggested_key": "Ctrl+Shift+7",
+			"global": true
 		},
 		"skip_song": {
-			"description": "Skip to the next song"
+			"description": "Skip to the next song",
+			"suggested_key": "Ctrl+Shift+8",
+			"global": true
 		},
 		"_execute_browser_action": {
 			"suggested_key": {
