@@ -43,6 +43,8 @@ window.debugRequests = false;
  *      - First run detection
  *      - Message passing from popups / settings
  *      - WebRequest User-Agent changing
+ * 
+ * TODO: Settings for custom html/css for elements (stations/covers/controls/etc)?
  */
 
 // ANCHOR Imports, typedefs, constants, util funcs
