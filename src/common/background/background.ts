@@ -634,7 +634,15 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 				messageTabs('toTabs_removedFromQueue', message.data);
 			}
 			return;
+
 		case 'toBg_seekBarDrag':
+			try {
+				playerAudio.currentTime = message.data;
+			} finally {
+				messageTabs('toTabs_seekBarAck', playerAudio.currentTime);
+			}
+			return;
+
 		case 'toBg_setFeedback':
 		case 'toBg_skipButton':
 		case 'toBg_playStation':
