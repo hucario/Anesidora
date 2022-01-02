@@ -621,6 +621,19 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 			return;
 
 		case 'toBg_removeFromQueue':
+			let i = playerState.comingEvents.findIndex(event => (
+				('trackToken' in event) ?
+					event.trackToken === message.data :
+					(
+						('adToken' in event) ?
+							event.adToken === message.data : false
+					)
+			));
+			if (i !== -1) {
+				playerState.comingEvents.splice(i, 1);
+				messageTabs('toTabs_removedFromQueue', message.data);
+			}
+			return;
 		case 'toBg_seekBarDrag':
 		case 'toBg_setFeedback':
 		case 'toBg_skipButton':
