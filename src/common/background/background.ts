@@ -671,7 +671,9 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 			try {
 				playerAudio.currentTime = message.data;
 			} finally {
-				messageTabs('toTabs_seekBarAck', playerAudio.currentTime);
+				if (!isNaN(playerAudio.currentTime)) {
+					messageTabs('toTabs_seekBarAck', playerAudio.currentTime);
+				}
 			}
 			return;
 
