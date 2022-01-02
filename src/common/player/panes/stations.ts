@@ -56,16 +56,8 @@ export default async function SetupStationsPane(
 			fn: (data: Message) => void
 		) => void
 	): Promise<HTMLElement> {
-
-	const loggedIn = await message<boolean>("isLoggedIn");
-
 	let stNodes = await buildPane(config, message);
-
-	if (loggedIn) {
-		return stNodes;
-	} else {
-		return document.createElement("div");
-	}
+	return stNodes;
 }
 
 async function buildPane(
@@ -90,25 +82,21 @@ async function buildPane(
 		theme.accentColor
 	);
 
-	const loggedIn = await message<boolean>("isLoggedIn");
+	const stations: PandoraStation[] = await message("toBg_getStations");
 
-	if (loggedIn) {
-		const stations: PandoraStation[] = await message("getStations");
+	for (let i = 0; i < stations.length; i++) {
+		const elem = strToHtml(stationHtml(
+			stations[i],
+			config
+		))[0];
 
-		for (let i = 0; i < stations.length; i++) {
-			const elem = strToHtml(stationHtml(
-				stations[i],
-				config
-			))[0];
+		elem.addEventListener('click', (e) => {
+			e.preventDefault();
 
-			elem.addEventListener('click', (e) => {
-				e.preventDefault();
+			message("toBg_playStation", stations[i].stationToken);
+		})
 
-				message("playStation", stations[i].stationToken);
-			})
-
-			stNodes.appendChild(elem);
-		}
+		stNodes.appendChild(elem);
 	}
 
 

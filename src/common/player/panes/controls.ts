@@ -7,9 +7,10 @@
  */
 
 
-import { PandoraRating, PandoraSong } from "../../background/pandora.js";
+import { PandoraRating, PandoraSong, PopulatedPandoraAd, UnpopulatedPandoraAd } from "../../background/pandora.js";
 import { AnesidoraConfig, AnesidoraFeedItem, AnesidoraState } from "../../background/store.js";
 import { Message } from "../../messages.js";
+import { setNestedProperty, stripTrackersFromUrl as stripTrackers } from "../../util.js";
 
 let ignoreAutoScroll = false;
 const SMOOTH_SCROLL_TIME = 5000;
@@ -128,12 +129,14 @@ const getControlsPaneHtml = (s: AnesidoraState) => (`
 			</button>
 		</div>
 		<div class="ct_volumeGroup">
-			<button class='bx bx-volume-${
+			<button>
+				<i class='bx bx-volume-${
 				s.volume > 0.5 ? 'full' : (
 					s.volume !== 0 ? 'low' :
 						'mute'
 				)
-			}'></button>
+				}'></i>
+			</button>
 			<div class="range" style="--val: ${s.volume};">
 				<input type="range" min="0" max="100" step="any">
 				<div class="rangeShow" id="volShow"></div>
@@ -160,7 +163,15 @@ function strToHtml(str: string): HTMLElement[] {
 }
 
 // Theme Item
-type TI<t extends keyof (AnesidoraConfig['theming']['controls'] & AnesidoraConfig['theming']['common'])> = (AnesidoraConfig['theming']['controls'] & AnesidoraConfig['theming']['common'])[t];
+type TI<
+	t extends keyof (
+		AnesidoraConfig['theming']['controls'] &
+		AnesidoraConfig['theming']['common']
+	)
+> = (
+	AnesidoraConfig['theming']['controls'] &
+	AnesidoraConfig['theming']['common']
+)[t];
 
 export default async function SetupControlsPane(
 		config: AnesidoraConfig,
@@ -178,7 +189,7 @@ export default async function SetupControlsPane(
 
 	let ctNodes = buildPane(config, state, message);
 
-	/**
+	/*
 	 * Honestly the partial updating is the most complicated part
 	 */
 
@@ -195,6 +206,35 @@ export default async function SetupControlsPane(
 
 	skipButton.addEventListener('click', () => message("toBg_skipButton"));
 
+	subscribe("toTabs_seekBarAck", (reply) => {
+		if (reply.name !== "toTabs_seekBarAck") {
+			return;
+		}
+		state.currentTime = reply.data;
+
+		if (typeof state.currentTime !== "number") {
+			if (state.currentTime === null) {
+				timestamp.innerText = '';
+				seekRange.style.setProperty(
+					'--val',
+					'100'
+				)
+				seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = 100;
+			}
+			return;
+		}
+		timestamp.innerText = getFormattedTime(state.currentTime);
+		timestamp.innerText += state.duration !== null ?
+			' / ' + getFormattedTime(state.duration)
+			: '';
+
+		seekRange.style.setProperty(
+			'--val',
+			(state.currentTime / state.duration) + ''
+		)	
+		seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = (state.duration / state.currentTime) * 100;
+	})
+
 	// Play/pause button pressed
 	subscribe("toTabs_skipButton", (reply) => {
 		if (reply.name !== "toTabs_skipButton") {
@@ -202,16 +242,14 @@ export default async function SetupControlsPane(
 			return;
 		}
 		
-		skipButton.style.pointerEvents = "none";
-		skipButton.style.opacity = "0.7";
+		skipButton.classList.add('activeButton');
 	})
 
 	subscribe("toTabs_resetSkip", (msg) => {
 		if (msg.name !== "toTabs_resetSkip") {
 			return;
 		}
-		skipButton.style.pointerEvents = "";
-		skipButton.style.opacity = "1";
+		skipButton.classList.remove('activeButton');
 	})
 
 	// Play/pause button pressed
@@ -221,16 +259,14 @@ export default async function SetupControlsPane(
 			return;
 		}
 		
-		playPauseButton.style.pointerEvents = "none";
-		playPauseButton.style.opacity = "0.7";
+		playPauseButton.classList.add('activeButton');
 	})
 
 	subscribe("toTabs_resetPlay", (msg) => {
 		if (msg.name !== "toTabs_resetPlay") {
 			return;
 		}
-		playPauseButton.style.pointerEvents = "";
-		playPauseButton.style.opacity = "1";
+		playPauseButton.classList.remove('activeButton');
 
 		
 		if (msg.data) {
@@ -247,6 +283,8 @@ export default async function SetupControlsPane(
 		if (msg.name !== 'toTabs_stateChanged') {
 			return;
 		}
+		
+		state[msg.data.key] = msg.data.newValue;
 
 		const d = {
 			key: <keyof AnesidoraState>msg.data.key,
@@ -268,16 +306,20 @@ export default async function SetupControlsPane(
 					}
 					break;
 				}
-				state.currentTime = d.new;
+				if (d.key === 'currentTime') {
+					state.currentTime = d.new;
+				} else {
+					state.duration = d.new;
+				}
 		
-				timestamp.innerText = getFormattedTime(d.new);
+				timestamp.innerText = getFormattedTime(state.currentTime);
 				timestamp.innerText += state.duration !== null ?
 					' / ' + getFormattedTime(state.duration)
 					: '';
 		
 				seekRange.style.setProperty(
 					'--val',
-					(d.new / state.duration) + ''
+					(state.currentTime / state.duration) + ''
 				)	
 				seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = (state.duration / state.currentTime) * 100;
 		
@@ -347,7 +389,7 @@ export default async function SetupControlsPane(
 				}
 				const volumeRange = ctNodes.querySelectorAll<HTMLElement>(".range")[1];
 				const volumeInput = volumeRange.querySelector<HTMLInputElement>("input");
-				const volumeIcon = volumeRange.parentElement.children[0];
+				const volumeIcon = volumeRange.parentElement.children[0].children[0];
 
 				volumeInput.valueAsNumber = (d.new * 100);
 				volumeIcon.className = `bx bx-volume-${
@@ -396,6 +438,8 @@ export default async function SetupControlsPane(
 			return;
 		}
 
+		setNestedProperty(config, reply.data.key, reply.data.newValue);
+
 		const d = {
 			key: reply.data.key,
 			new: reply.data.newValue,
@@ -412,7 +456,7 @@ export default async function SetupControlsPane(
 					case 'common':
 					case 'controls':
 						if (segments.length === 2) {
-							throwHere(`config.theming.${segments[1]} should NOT be set directly.`)
+							throwHere(`config.theming.${segments[1]} should not be set directly.`)
 						}
 						const common = config.theming.common;
 						const ctl = config.theming.controls;
@@ -437,14 +481,30 @@ export default async function SetupControlsPane(
 								break;
 
 							case 'miniPlayerMode':
-								
+								// TODO: Miniplayer mode
+								break;
+
+							case 'padding':
+								ctNodes.style.padding = common.padding ?? <TI<'padding'>>d.new;
+								break;
+
+							case 'rangeBgColor':
+								ctNodes.style.setProperty(
+									'--seek-bgcolor',
+									ctl.seekBgColor ?? <TI<'rangeBgColor'>>d.new
+								);
+								ctNodes.style.setProperty(
+									'--volume-bgcolor',
+									ctl.volumeBgColor ?? <TI<'rangeBgColor'>>d.new
+								);
+								break;
+
+							case 'singleCoverMode':
+								// TODO: Switch between Single/Multi cover mode
 								break;
 
 							case 'textColor':
 								ctNodes.style.color = common.textColor ?? <TI<'textColor'>>d.new;
-								break;
-							case 'padding':
-								ctNodes.style.padding = common.padding ?? <TI<'padding'>>d.new;
 								break;
 							case 'volumeColor':
 								ctNodes.style.setProperty(
@@ -472,115 +532,51 @@ export default async function SetupControlsPane(
 								break;
 
 							default:
-								logHere(`Unhandled config.${d.key} set to ${d.new} (was: ${d.old})`);
+								logHere(`Attempt was made to set config.${d.key}, but nothing happened as it's not a real key(?)`);
 								break;
 						}
+						break;
 				}
 				break;
-		}
-	});
 
-/*
-	subscribe("configChanged", (reply) => {
-		if (reply.name !== 'configChanged') {
-			return;
-		}
-
-		if (reply.data.key === 'controlsPane') {
-			const d = reply.data as {
-				newValue: AnesidoraConfig['controlsPane']
-			}
-			// There are no settings for this... yet...
-			
-
-			return;
-		}
-
-		if (reply.data.key === 'theming') {
-			const d = reply.data as {
-				newValue: AnesidoraConfig['theming']
-			};
-
-			const oldTheme = {
-				...config.theming.controls,
-				...config.theming.common
-			}
-			const newTheme = {
-				...d.newValue.controls,
-				...d.newValue.common
-			}
-			
-			config.theming = d.newValue;
-
-			ctNodes.style.background = newTheme.backgroundColor;
-			ctNodes.style.color = newTheme.textColor;
-			ctNodes.style.padding = newTheme.padding;
-			ctNodes.style.setProperty(
-				'--accent-color',
-				newTheme.accentColor
-			);
-			ctNodes.style.setProperty(
-				'--volume-color',
-				newTheme.volumeColor ?? newTheme.rangeColor ?? newTheme.accentColor
-			);
-			ctNodes.style.setProperty(
-				'--seek-color',
-				newTheme.seekColor ?? newTheme.rangeColor ?? newTheme.accentColor
-			);
-			ctNodes.style.setProperty(
-				'--volume-bgcolor',
-				newTheme.volumeBgColor ?? newTheme.rangeBgColor
-			);
-			ctNodes.style.setProperty(
-				'--seek-bgcolor',
-				newTheme.seekBgColor ?? newTheme.rangeBgColor
-			);
-
-			/**
-			 * We can't check objects for changes directly,
-			 * as runtime.sendMessage is pass-by-value, not by reference
-			 * 
-			 * So we'll just have to check values manually
-			 * /
-
-			let completely_rebuilding = false;
-
-			let bPChildren: HTMLElement[] = [];
-			[...ctNodes.children].forEach(e => {
-				if (e instanceof HTMLElement) {
-					bPChildren.push(e);
-				}
-			});
-
-			if (
-				(false)
-			) {
-				completely_rebuilding = true;
-			}
-
-			if (!completely_rebuilding) {
-				if (newTheme.defaultAlbumCover !== oldTheme.defaultAlbumCover) {
-					for (const img of ctNodes.getElementsByTagName("img")) {
-						if (img.src === oldTheme.defaultAlbumCover) {
-							img.src = newTheme.defaultAlbumCover;
+				case 'stripTrackers':
+					if (d.new && !d.old) {
+						// bad -> good
+						for (let anchor of ctNodes.getElementsByTagName('a')) {
+							if (anchor.href.includes('pandora.com')) {
+								anchor.setAttribute('data-trackerlink', anchor.href);
+								anchor.href = stripTrackers(anchor.href);
+							}
+						}	
+					} else if (!d.new && d.old) {
+						// good -> bad, restore backups
+						for (let anchor of ctNodes.getElementsByTagName('a')) {
+							if (anchor.getAttribute('data-trackerlink')) {
+								anchor.href = anchor.getAttribute('data-trackerlink');
+								anchor.removeAttribute('data-trackerlink')
+							}
 						}
 					}
-				}
-			} else {
-				let oldCTNodes = ctNodes;
-				ctNodes = buildPane(config, state, message)
-				oldCTNodes.replaceWith(ctNodes);
-			}
-		}
-	})
+					break;
 
-	*/
+				case 'controlsPane':
+					if (segments.length === 1) {
+						throwHere(`config.controlsPane should not be set directly.`)
+					}
+					switch (<keyof AnesidoraConfig['controlsPane']>segments[1]) {
+						case 'autoScroll':
+							// Do nothing, it's automatically set.
+							// Good to have noted as covered, though.
+							break;
+					}
+		}
+	});
 	return ctNodes;
 }
 
 // ANCHOR cover html
 const genCover = (
-	e: PandoraSong,
+	e: PandoraSong | PopulatedPandoraAd | UnpopulatedPandoraAd,
 	i: {
 		current: boolean,
 		position: number
@@ -596,8 +592,8 @@ const genCover = (
 	let nodes = strToHtml(`
 <div
  data-where="${i.position}"
- id="${e.trackToken}"
- class="ct_cover ${e.albumArtUrl ? '' : 'ct_noCover'} ${i.current ? "ct_current" : ''}"
+ id="${'adToken' in e ? e.adToken : e.trackToken}"
+ class="ct_cover ${'albumArtUrl' in e && e.albumArtUrl ? '' : 'ct_noCover'} ${i.current ? "ct_current" : ''}"
 >
 	<div class="ct_info">
 		<span class="ct_position">${i.position > 0 ? (
@@ -609,17 +605,18 @@ const genCover = (
 					"Previous song" :
 					`${(i.position+1) * -1} songs ago`
 		)}</span>
-		<span class="ct_author">${e.artistName}</span>
-		<span class="ct_songTitle">${e.songName}</span>
-		<span class="ct_albumTitle">${e.albumName}</span>
+		<span class="ct_author">${'artistName' in e ? e.artistName : (e.populated ? e.companyName : '')}</span>
+		<span class="ct_songTitle">${'songName' in e ? e.songName : (e.populated ? e.title : 'Advertisement')}</span>
+		<span class="ct_albumTitle">${'albumName' in e ? e.albumName : ''}</span>
 		<div class="ct_coverActions">
-			<button alt="Like this track">
+			${'songRating' in e ? 
+			`<button class="ct_coverLike" alt="Like this track">
 				<i
 				 class="bx bx${
 					e.songRating === PandoraRating.THUMBS_UP ?
 						"s" : ""
 				}-like"></i>
-			</button>
+			</button>${/* Yes, this is on purpose.*/''}
 			<a
 			 href="${e.audioUrlMap.highQuality?.audioUrl ??
 				e.audioUrlMap.mediumQuality?.audioUrl ??
@@ -630,12 +627,12 @@ const genCover = (
 			>
 				<i class="bx bx-download"></i>
 			</a>
-			<button alt="Dislike this track">
+			<button class="ct_coverDislike" alt="Dislike this track">
 				<i class="bx bx${
 					e.songRating === PandoraRating.THUMBS_DOWN ?
 						"s" : ""
 				}-dislike"></i>
-			</button>
+			</button>` : ''}
 				${
 					i.position > 0 ? 
 					`<button class="ct_playCover" alt="Play this track">
@@ -650,67 +647,42 @@ const genCover = (
 		</div>
 	<img
 	 class="ct_actualCover" 
-	 src="${e.albumArtUrl ?? ''}"
+	 src="${
+		 'albumArtUrl' in e ? 
+		 	(e.albumArtUrl ?? config.theming.common.defaultAlbumCover ?? config.theming.controls.defaultAlbumCover) : 
+			(e.populated ? 
+				e.imageUrl :
+				'' // TODO: Default ad image?? Low priority, as this is unlikely to happen
+				)
+	}"
 	/>
 </div>
 	`)[0];
 
+	const token = 'trackToken' in e ? e.trackToken : e.adToken;
+
 	const likeButton = nodes
-	.querySelector<HTMLButtonElement>('.ct_coverActions > :first-child');
+	.querySelector<HTMLButtonElement>('.ct_coverLike');
 	const dislikeButton = nodes
-	.querySelector<HTMLButtonElement>('.ct_coverActions > :nth-child(3)');
+	.querySelector<HTMLButtonElement>('ct_coverDislike');
 	const removeButton = nodes
 	.querySelector<HTMLButtonElement>('.ct_remove');
 	const playButton = nodes
-	.querySelector<HTMLButtonElement>('.ct_coverActions > .ct_playCover');
+	.querySelector<HTMLButtonElement>('.ct_playCover');
 
-	let tryingToPlay = false;
-	playButton?.addEventListener('click', () => {
-		(async()=>{
-			const where = parseInt(nodes.getAttribute("data-where") || '0');
-			if (!where || where <= 0 || tryingToPlay) { return; }
-			tryingToPlay = true;
-			for (let p = 0; p < where; p++) {
-/*
-				await message("removeFromQueue", {
-					token: state.comingEvents[0].trackToken
-				});
-*/
-			}
-//			await message("skip");
-		})();
-	})
-
-	removeButton?.addEventListener('click', () => {
-/*
-		message("removeFromQueue", {
-			token: e.trackToken
+	playButton?.addEventListener('click', () => message("toBg_coverPlayButtonPress", token))
+	removeButton?.addEventListener('click', () => message("toBg_removeFromQueue", token))
+	likeButton?.addEventListener("click", () => {
+		message("toBg_setFeedback", {
+			token,
+			rating: PandoraRating.THUMBS_UP
 		});
-*/
 	})
-
-	let tryingToLike = false;
-	likeButton.addEventListener("click", () => {
-		if (tryingToLike) { return; }
-		tryingToLike = true;
-		if (e.songRating !== PandoraRating.THUMBS_UP) {
-/*			message("like", {
-				token: e.trackToken
-			});
-*/
-		}
-	})
-
-	let tryingToDislike = false;
-	dislikeButton.addEventListener("click", () => {
-		if (tryingToDislike) { return; }
-		tryingToDislike = true;
-		if (e.songRating !== PandoraRating.THUMBS_DOWN) {
-/*			message("dislike", {
-				token: e.trackToken
-			});
-*/
-		}
+	dislikeButton?.addEventListener("click", () => {
+		message("toBg_setFeedback", {
+			token,
+			rating: PandoraRating.THUMBS_DOWN
+		});
 	})
 
 	return nodes;
@@ -764,43 +736,24 @@ function buildPane(
 	const seekInput = seekRange.querySelector<HTMLInputElement>("input");
 	const volumeInput = volumeRange.querySelector<HTMLInputElement>("input");
 
-	const volumeIcon = volumeRange.parentElement.children[0];
+	const volumeIcon = volumeRange.parentElement.children[0].children[0];
 
-	seekInput.value = (
+	seekInput.valueAsNumber = (
 		state.currentTime !== null && state.duration !== null ? (
 			(state.currentTime / state.duration) * 100
 		) : 0
-	 ) + "";
+	);
 
-	volumeInput.value = (state.volume*100) + "";
+	volumeInput.valueAsNumber = state.volume * 100;
 
-
-	const timestamp = ctNodes.querySelector<HTMLSpanElement>("#ct_timestamp");
 	seekInput.addEventListener("input", (e) => {
 		if (!(e.target instanceof HTMLInputElement)) {
 			return;
 		}
-/*
-		message("seek", state.duration * (e.target.valueAsNumber / 100));
-*/
-
-		timestamp.innerText = `${
-			state.currentTime !== null ?
-				getFormattedTime(state.duration * (e.target.valueAsNumber / 100)) : ''
-		}${
-			state.currentTime !== null && state.duration !== null ?
-				' / ' + getFormattedTime(state.duration) : ''
-		}`;
-
-		seekRange.style.setProperty(
-			'--val',
-			(e.target.valueAsNumber / 100) + ''
-		)
+		message("toBg_seekBarDrag", state.duration * e.target.valueAsNumber / 100);
 	})
 
-	let nonMutedVol: null | number = null;
-
-	volumeIcon.addEventListener("click", () => {
+	volumeRange.parentElement.children[0].addEventListener("click", () => {
 		if (volumeInput.valueAsNumber !== 0) {
 			/*
 			message("changeVolume", 0);
@@ -821,7 +774,7 @@ function buildPane(
 //		message("changeVolume", e.target.valueAsNumber / 100);
 
 		// Usually, classList is the right choice. This is one of the instances where it isn't.
-		volumeIcon.className = `bx bx-volume-${
+/*		volumeIcon.className = `bx bx-volume-${
 			e.target.valueAsNumber > 50 ? 'full' : (
 				e.target.valueAsNumber !== 0 ? 'low' :
 					'mute'
@@ -832,7 +785,7 @@ function buildPane(
 		volumeRange.style.setProperty(
 			'--val',
 			(e.target.valueAsNumber / 100) + ''
-		)
+		)*/
 	})
 
 	if (!config.theming.controls.singleCoverMode) {

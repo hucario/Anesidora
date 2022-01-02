@@ -15,8 +15,28 @@ export type ToTabsMessages = {
 	ResetPlayButton |
 	UpdateTabTime |
 	StateWasChanged |
-	QueueYeeted
+	QueueYeeted |
+	SeekBarAck |
+	BookmarksUpdated |
+	StationsUpdated
 )
+
+type StationsUpdated = {
+	name: "toTabs_stationsUpdated",
+	data: PandoraStation[]
+}
+
+type BookmarksUpdated = {
+	name: "toTabs_bookmarksUpdated",
+	data: Bookmarks
+}
+
+
+type SeekBarAck = {
+	name: "toTabs_seekBarAck",
+	data: number
+}
+
 type QueueYeeted = {
 	name: "toTabs_removedFromQueue",
 	/** Track token or ad id yeeted */
@@ -65,8 +85,58 @@ export type ToBgMessages = {
 	GetStateMessage |
 	PlayButtonPress |
 	SkipButtonPress |
-	QueueYeet
+	QueueYeet |
+	Cover_PlayButtonPress |
+	SetFeedback |
+	SeekBarDragged |
+	GetBookmarks |
+	GetStations |
+	PlayStation
 )
+
+type PlayStation = {
+	name: "toBg_playStation",
+	/** Station token */
+	data: string
+}
+
+type GetStations = {
+	name: "toBg_getStations",
+	/** Force (cachebust)? */
+	data?: boolean
+}
+
+export type GetStationsResponse = PandoraStation[];
+
+type GetBookmarks = {
+	name: "toBg_getBookmarks",
+	/** Force (cachebust)? */
+	data?: boolean
+}
+
+export type GetBookmarksResponse = Bookmarks;
+
+
+type SeekBarDragged = {
+	name: "toBg_seekBarDrag",
+	/** Seconds through, 0 < data < duration */
+	data: number
+}
+
+type Cover_PlayButtonPress = {
+	name: "toBg_coverPlayButtonPress",
+	/** Track token */
+	data: string
+}
+export type Cover_PlayButtonPressResponse = never;
+
+type SetFeedback = {
+	name: "toBg_setFeedback",
+	data: {
+		token: string,
+		rating: PandoraRating
+	}
+}
 
 type QueueYeet = {
 	name: "toBg_removeFromQueue",

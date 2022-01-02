@@ -27,6 +27,11 @@ import SetupHistoryPane from './panes/history.js';
  * How long to wait for smooth scroll before reenabling scroll detection on the Covers panel.
  */
 const SMOOTH_SCROLL_TIMEOUT = 2000;
+/**
+ * How long the transition is when changing panes.
+ */
+const TRANSITION_TIME = 350;
+
 const UA = getBrowser();
 
 const panesParent = document.getElementById("panes");
@@ -75,7 +80,7 @@ function message<expectedResponse>(name: Message['name'], data?: Message['data']
 
 // ANCHOR: Config & listeners
 
-const actualConfig = await message<AnesidoraConfig>("getConfig");
+const actualConfig = await message<AnesidoraConfig>("toBg_getConfig");
 
 
 type MessageListener = (data: Message) => void;
@@ -159,8 +164,13 @@ function showPane(to: number) {
 		),
 		actualConfig.playerPanes.length - 1
 	)
+	for (let i = 0; i < panesParent.children.length; i++) {
+		let c = panesParent.children[i];
+		if (c instanceof HTMLElement) {
+			c.style.visibility = '';
+		}
+	}
 	panesParent.style.transform = `translateX(-${100 * toUsed}vw)`;
-
 	if (toUsed === 0) {
 		leftTab.style.display  = 'none';
 		rightTab.style.display = 'block';
@@ -173,6 +183,18 @@ function showPane(to: number) {
 	}
 
 	paneOn = toUsed;
+
+	setTimeout(() => {
+		for (let i = 0; i < panesParent.children.length; i++) {
+			if (i === paneOn) {
+				continue;
+			}
+			let c = panesParent.children[i];
+			if (c instanceof HTMLElement) {
+				c.style.visibility = 'hidden';
+			}
+		}
+	}, TRANSITION_TIME)
 }
 
 leftTab.addEventListener('click', (e) => {
@@ -198,7 +220,7 @@ for (let key in actualConfig.theming.cssVars) {
 if (actualConfig.theming.customCSS) {
 	document.head.appendChild(new DOMParser()
 		.parseFromString(`
-			<style>
+			<style data-custom-css>
 				${actualConfig.theming.customCSS}
 			</style>
 		`.replace(/(	)|\t/g,''), "text/html")
@@ -212,40 +234,50 @@ if (actualConfig.theming) {
 	document.documentElement.style.height = actualConfig.theming.popupHeight;
 }
 
-subscribe("configChanged", (reply) => {
-	if (reply.name !== 'configChanged') {
+subscribe("toTabs_configChanged", (reply) => {
+	if (reply.name !== 'toTabs_configChanged') {
 		return;
 	}
-	if (reply.data.key === "theming") {
-		const d = reply.data as {
-			newValue: AnesidoraConfig['theming']
-			oldValue: AnesidoraConfig['theming']
-		};
 
-		for (let key in d.newValue.cssVars) {
-			document.documentElement.style.setProperty(
-				`--${key}`,
-				d.newValue.cssVars[key]
-			)
-		}
-
-		if (d.newValue.customCSS !== d.oldValue.customCSS) {
-			document.head.getElementsByTagName("style")[
-				document.head.getElementsByTagName("style").length - 1
-			].replaceWith(new DOMParser()
-				.parseFromString(`
-					<style>
-						${actualConfig.theming.customCSS}
-					</style>
-				`.replace(/(	)|\t/g,''), "text/html")
-				.body
-				.children[0]
-			)
-		}
+	const d = {
+		key: reply.data.key,
+		new: reply.data.newValue,
+		old: reply.data.oldValue
+	}
+	
+	const segments = d.key.split('.');
+	switch (<keyof AnesidoraConfig>segments[0]) {
+		case 'theming':
+			if (segments.length === 1) {
+				throwHere(`config.theming should not be set directly`);
+			}
+			switch (<keyof AnesidoraConfig['theming']>segments[1]) {
+				case 'cssVars':
+					for (let key in <AnesidoraConfig['theming']['cssVars']>d.new) {
+						document.documentElement.style.setProperty(
+							`--${key}`,
+							d.new[key]
+						)
+					}
+					break;
+				case 'customCSS':
+					document.head.querySelector<HTMLStyleElement>("style[data-custom-css]")[0].replaceWith(
+						new DOMParser()
+							.parseFromString(`
+								<style data-custom-css>
+									${<AnesidoraConfig['theming']['customCSS']>d.new}
+								</style>
+							`.replace(/(	)|\t/g,''), "text/html")
+							.body
+							.children[0]
+					)
+				break;
+				case 'popupHeight':
+			}
 	}
 })
 
 
 setTimeout(() => {
-	panesParent.style.transition = 'transform 350ms';
+	panesParent.style.transition = `transform ${TRANSITION_TIME}ms`;
 }, 150);

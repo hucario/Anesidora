@@ -388,6 +388,10 @@ try {
 	logHere('Successfully loaded existing config.')
 } catch(e) {
 	actualConfig = defaultConfig;
+	localStorage.setItem(
+		ANESIDORA_NAMESPACE,
+		JSON.stringify(actualConfig)
+	);
 	logHere('Could not load any existing config; using default.')
 }
 

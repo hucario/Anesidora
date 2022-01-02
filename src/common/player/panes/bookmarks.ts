@@ -48,6 +48,12 @@ function strToHtml(str: string): HTMLElement[] {
 	return typedNodes;
 }
 
+// ConfigItem
+type CI<t extends keyof AnesidoraConfig> = AnesidoraConfig[t];
+// ThemeItem
+type TI<t extends keyof AnesidoraConfig['theming']['bookmarks']> = 
+	AnesidoraConfig['theming']['bookmarks'][t];
+
 export default async function SetupBookmarksPane(
 		config: AnesidoraConfig,
 		message: <expectedResponse>(
@@ -59,16 +65,8 @@ export default async function SetupBookmarksPane(
 			fn: (data: Message) => void
 		) => void
 	): Promise<HTMLElement> {
-	const isLoggedIn = await message<boolean>("isLoggedIn");
 	let bookmarks: Bookmarks;
-	if (isLoggedIn) {
-		bookmarks = await message<Bookmarks>("getBookmarks");
-	} else {
-		bookmarks = {
-			artists: [],
-			songs: []
-		}
-	}
+	bookmarks = await message<Bookmarks>("toBg_getBookmarks");
 	
 
 	let bPNodes = buildPane(config, bookmarks);
@@ -77,148 +75,135 @@ export default async function SetupBookmarksPane(
 	 * Honestly the partial updating is the most complicated part
 	 */
 
-	subscribe("configChanged", (reply) => {
-		if (reply.name !== 'configChanged') {
+	subscribe("toTabs_configChanged", (reply) => {
+		if (reply.name !== 'toTabs_configChanged') {
 			return;
 		}
 
-		if (reply.data.key === 'searchProvider') {
-			const d = reply.data as {
-				oldValue: AnesidoraConfig['searchProvider']
-				newValue: AnesidoraConfig['searchProvider']
-			}
-
-			const anchors = bPNodes.getElementsByTagName("a");
-			for (const anchor of anchors) {
-				if (anchor.href.startsWith(d.oldValue)) {
-					anchor.href = anchor.href.replace(d.oldValue, d.newValue);
-				}
-			}
-			return;
+		const d = {
+			key: reply.data.key,
+			old: <AnesidoraConfig[keyof AnesidoraConfig]>reply.data.oldValue,
+			new: <AnesidoraConfig[keyof AnesidoraConfig]>reply.data.newValue
 		}
 
-		if (reply.data.key === 'bookmarksPane') {
-			const d = reply.data as {
-				newValue: AnesidoraConfig['bookmarksPane']
-			}
-			/**
-			 * There are no settings for this... yet...
-			 */
+		const segments = reply.data.key.split('.');
+		const bkT = config.theming.bookmarks;
+		const commT = config.theming.common;
 
-			return;
+		let groups: {
+			artistGroup: null | Element,
+			combinedGroup: null | Element,
+			songGroup: null | Element
+		} = {
+			artistGroup: null,
+			combinedGroup: null,
+			songGroup: null
 		}
 
-		if (reply.data.key === 'theming') {
-			const d = reply.data as {
-				newValue: AnesidoraConfig['theming']
-			};
+		if (bkT.combined) {
+			groups.combinedGroup = bPNodes.children[1];
+		} else if (bkT.groupMode === 'artist_first') {
+			groups.artistGroup = bPNodes.children[1];
+			groups.songGroup = bPNodes.children[3];
+		} else {
+			groups.artistGroup = bPNodes.children[3];
+			groups.songGroup = bPNodes.children[1];
+		}
 
-			const oldTheme = {
-				...config.theming.bookmarks,
-				...config.theming.common
-			}
-			const newTheme = {
-				...d.newValue.bookmarks,
-				...d.newValue.common
-			}
-			
-
-			bPNodes.style.padding = newTheme.padding;
-			bPNodes.style.backgroundColor = newTheme.backgroundColor;
-			bPNodes.style.color = newTheme.textColor;
-
-			config.theming = d.newValue;
-
-			/**
-			 * Things we need to rebuild for:
-			 * - Changing modes
-			 * 
-			 * We can't check objects for changes directly,
-			 * as runtime.sendMessage is pass-by-value, not by reference
-			 * 
-			 * So we'll just have to check values manually
-			 */
-
-			let totally_rebuilding = false;
-
-			let bPChildren: HTMLElement[] = [];
-			[...bPNodes.children].forEach(e => {
-				if (e instanceof HTMLElement) {
-					bPChildren.push(e);
-				}
-			});
-
-			if (
-				(newTheme.mode !== oldTheme.mode) ||
-				(newTheme.combined !== oldTheme.combined)
-			) {
-				totally_rebuilding = true;
-			}
-			if (!totally_rebuilding) {
-				if (newTheme.backgroundColor !== oldTheme.backgroundColor) {
-					bPNodes.style.background = newTheme.backgroundColor;
-				}
-				if (newTheme.padding !== oldTheme.padding) {
-					bPNodes.style.padding = newTheme.padding;
-				}
-				if (newTheme.textColor !== oldTheme.textColor) {
-					bPNodes.style.color = newTheme.textColor;
-				}
-	
-				let artistGroup: HTMLElement | null;
-				let songGroup: HTMLElement | null;
-				let combinedGroup: HTMLElement | null;
-	
-				if (oldTheme.combined) {
-					artistGroup = songGroup = null;
-					combinedGroup = bPChildren[1];
-				} else if (oldTheme.groupMode === 'artist_first') {
-					artistGroup = bPChildren[1];
-					songGroup = bPChildren[3];
-					combinedGroup = null;
-				} else {
-					artistGroup = bPChildren[3];
-					songGroup = bPChildren[1];
-					combinedGroup = null;
-				}
-	
-				const groupKeys = [
-					["artistGroup", artistGroup],
-					["combinedGroup", combinedGroup],
-					["songGroup", songGroup]
-				] as const;
-	
-				for (let key of groupKeys) {
-					if (oldTheme[key[0]].columns !== newTheme[key[0]].columns) {
-						key[1].style.setProperty('--column-count', '' + newTheme[key[0]].columns);
-					}
-					if (oldTheme[key[0]].gap !== newTheme[key[0]].gap) {
-						key[1].style.setProperty('--gap', newTheme[key[0]].gap);
-					}
-					if (oldTheme[key[0]].columns !== newTheme[key[0]].columns) {
-						key[1].style.setProperty('--img-size', newTheme[key[0]].imgSize);
+		switch (<keyof AnesidoraConfig>segments[0]) {
+			case 'searchProvider':
+				for (const anchor of bPNodes.getElementsByTagName("a")) {
+					if (anchor.href.startsWith(<CI<'searchProvider'>>d.old)) {
+						anchor.href = anchor.href
+							.replace(
+								<CI<'searchProvider'>>d.old,
+								<CI<'searchProvider'>>d.new
+							);
 					}
 				}
-	
-				if (newTheme.groupMode != oldTheme.groupMode && !oldTheme.combined) {
-					// just swap em around >:)
-					bPNodes.appendChild(bPChildren[2])
-					bPNodes.appendChild(bPChildren[3])	
+				break;
+			case 'theming':
+				if (segments.length === 1) {
+					throwHere(`Do not set config.theming directly.`);
 				}
-				if (newTheme.defaultAlbumCover !== oldTheme.defaultAlbumCover) {
-					for (const img of bPNodes.getElementsByTagName("img")) {
-						if (img.src === oldTheme.defaultAlbumCover) {
-							img.src = newTheme.defaultAlbumCover;
+				switch (<keyof AnesidoraConfig['theming']>segments[1]) {
+					case 'bookmarks':
+					case 'common':
+						if (segments.length === 2) {
+							throwHere(`Do not set config.theming.${segments[1]} directly.`);
 						}
-					}
-				}
-			} else {
-				config.theming = d.newValue;
-				let oldbPNodes = bPNodes;
-				bPNodes = buildPane(config, bookmarks);
-				oldbPNodes.replaceWith(bPNodes)
-			}
+						switch (<keyof AnesidoraConfig['theming']['bookmarks']>segments[2]) {
+							case 'padding':
+								bPNodes.style.padding = <TI<'padding'>>d.new;
+								break;
+							case 'backgroundColor':
+								bPNodes.style.background = <TI<'backgroundColor'>>d.new;
+								break;
+							case 'textColor':
+								bPNodes.style.color = <TI<'textColor'>>d.new;
+								break;
+							case 'mode':
+							case 'combined':
+								let oldbPNodes = bPNodes;
+								bPNodes = buildPane(config, bookmarks);
+								oldbPNodes.replaceWith(bPNodes)
+								break;
+
+							case 'groupMode':
+								if (!config.theming.bookmarks.combined) {
+									bPNodes.appendChild(bPNodes.children[2])
+									bPNodes.appendChild(bPNodes.children[3])	
+								}
+								break;
+
+							case 'artistGroup':
+							case 'combinedGroup':
+							case 'songGroup':
+								if (segments.length === 3) {
+									throwHere(`Do not set config.theming.bookmarks.${segments[2]} directly.`);
+								}
+								switch (<keyof AnesidoraConfig['theming']['bookmarks']['artistGroup']>segments[3]) {
+									case 'columns':
+										(<HTMLElement>groups[segments[2]]).style.setProperty(
+											'--column-count',
+											'' + <TI<'artistGroup'>['columns']>d.new
+										);
+										break;
+									case 'gap':
+										(<HTMLElement>groups[segments[2]]).style.setProperty(
+											'--gap',
+											'' + <TI<'artistGroup'>['gap']>d.new
+										);
+										break;
+									case 'imgSize':
+										(<HTMLElement>groups[segments[2]]).style.setProperty(
+											'--img-size',
+											'' + <TI<'artistGroup'>['imgSize']>d.new
+										);
+										break;										
+								}
+								break;
+							case 'defaultAlbumCover':
+								for (const img of bPNodes.getElementsByTagName("img")) {
+									if (img.src === <TI<'defaultAlbumCover'>>d.old) {
+										img.src = <TI<'defaultAlbumCover'>>d.new;
+									}
+								}
+								break;
+						}
+						break;
+				} 
 		}
+	})
+
+	subscribe('toTabs_bookmarkUpdated', (msg) => {
+		if (msg.name !== 'toTabs_bookmarksUpdated') {
+			return;
+		}
+		let oldbPNodes = bPNodes;
+		bookmarks = msg.data;
+		bPNodes = buildPane(config, msg.data);
+		oldbPNodes.replaceWith(bPNodes)
 	})
 
 	return bPNodes;

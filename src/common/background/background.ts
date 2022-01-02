@@ -57,7 +57,7 @@ import type {
 	OnBeforeSendHeadersDetails,
 	HttpHeader
 } from './webRequest'
-import { getNestedProperty, setNestedProperty } from '../util.js';
+import { getNestedProperty, setNestedProperty, TimedCache } from '../util.js';
 
 function throwHere(msg: string): never {
 	console.error(`%cbackground.ts: "${msg}"`, `
@@ -324,8 +324,8 @@ async function loginAndPopulate(email: string, password: string): Promise<void> 
 
 	let b = stringToBytes(decrypt(partnerRes.result.syncTime));
 	// skip 4 bytes of garbage
-	let s = "", i;
-	for (i = 4; i < b.length; i++) {
+	let s = "";
+	for (let i = 4; i < b.length; i++) {
 		s += String.fromCharCode(b[i]);
 	}
 	// synctime
@@ -375,10 +375,13 @@ async function loginAndPopulate(email: string, password: string): Promise<void> 
 
 	currentAccount.bookmarks = bookmarks;
 
-	store.actualConfig.accounts.splice(
-		store.actualConfig.accounts.findIndex(e => e.email === currentAccount.email),
-		1
-	);
+	let index = store.actualConfig.accounts.findIndex(e => e.email === currentAccount.email);
+	if (index !== -1) {
+		store.actualConfig.accounts.splice(
+			index,
+			1
+		);	
+	}
 
 	store.set(
 		'accounts',
@@ -461,14 +464,27 @@ function fixArtUrl(artUrl: string | undefined): string {
 	return aurl;
 }
 
-let cachedBookmarks: PRes.user.getBookmarks;
-let lastBookmarkPull: number;
+const cachedBookmarks = new TimedCache<string, PRes.user.getBookmarks>(30 * 1000);
 
-async function getBookmarks(): Promise<Bookmarks> {
-	if (!cachedBookmarks || (lastBookmarkPull && lastBookmarkPull < Date.now() - 30000)) {
-		let res = await sendRequest<PRes.user.getBookmarks>(
-			'user.getBookmarks'
-		)
+
+async function getBookmarks(force = false): Promise<Bookmarks> {
+	if (!currentAccount || !currentAccount.populated) {
+		return {
+			artists: [],
+			songs: []
+		}
+	}
+	if (!cachedBookmarks.get(currentAccount.email, force)) {
+		let res: ResponseOK<PRes.user.getBookmarks>;
+		try {
+			res = await sendRequest('user.getBookmarks');
+		} catch(e) {
+			errorHere(`user.getBookmarks: `, new PAPIError(e));
+			return {
+				artists: [],
+				songs: []
+			}
+		}
 
 		res.result.artists = res.result.artists.map(item => {
 			item.artUrl = fixArtUrl(item.artUrl);
@@ -479,12 +495,13 @@ async function getBookmarks(): Promise<Bookmarks> {
 			return item;
 		})
 
-		cachedBookmarks = res.result;
-		lastBookmarkPull = Date.now();
-
+		if (JSON.stringify(res.result) !== JSON.stringify(cachedBookmarks.get(currentAccount.email))) {
+			messageTabs("toTabs_bookmarksUpdated", res.result);
+		}
+		cachedBookmarks.set(currentAccount.email, res.result)
 		return res.result;
 	} else {
-		return cachedBookmarks;
+		return cachedBookmarks.get(currentAccount.email);
 	}
 }
 
@@ -496,30 +513,57 @@ async function getPlaylist(token: string, starting: boolean) {
 		includeTrackLength: true
 	}
 
-	let res = await sendRequest<PRes.station.getPlaylist>(
-		'station.getPlaylist',
-		req
-	);
+	try {
+		let res = await sendRequest<PRes.station.getPlaylist>(
+			'station.getPlaylist',
+			req
+		);
 
-	return res.result.items;
-}
-
-async function getStations(): Promise<PandoraStation[]> {
-	let req: PReq.user.getStationList = {
-		includeAdAttributes: true,
-		includeExplanations: true,
-		includeStationArtUrl: true,
-		stationArtSize: `W200H200`,
-		includeStationSeeds: true
+		return res.result.items;
+	} catch(e) {
+		errorHere(`station.getPlaylist: `, new PAPIError(e));
 	}
-
-	let res = await sendRequest<PRes.user.getStationList>(
-		'user.getStationList',
-		req
-	)
-
-	return res.result.stations;
 }
+
+
+const cachedStations = new TimedCache<string, PandoraStation[]>(1000 * 30);
+
+async function getStations(force=false): Promise<PandoraStation[]> {
+	if (!currentAccount || !currentAccount.populated) {
+		return []
+	}
+	if (!cachedStations.get(currentAccount.email, force)) {
+		let req: PReq.user.getStationList = {
+			includeAdAttributes: true,
+			includeExplanations: true,
+			includeStationArtUrl: true,
+			stationArtSize: `W200H200`,
+			includeStationSeeds: true
+		}
+	
+		let res: ResponseOK<PRes.user.getStationList>;
+		
+		try {
+			res = await sendRequest<PRes.user.getStationList>(
+				'user.getStationList',
+				req
+			);	
+		} catch(e) {
+			errorHere(`user.getStationList: `, new PAPIError(e))
+			return [];
+		}
+	
+
+		if (JSON.stringify(res.result) !== JSON.stringify(cachedStations.get(currentAccount.email))) {
+			messageTabs("toTabs_stationsUpdated", res.result.stations);
+		}
+		cachedStations.set(currentAccount.email, res.result.stations)
+		return res.result.stations;
+	} else {
+		return cachedStations.get(currentAccount.email);
+	}
+}
+
 
 
 // ANCHOR Misc listeners
@@ -531,7 +575,7 @@ UA.runtime.onMessage.addListener(
 	) => {
 		if (message.toBg) {
 			handleMessage(message).then((res) => {
-				console.log(`In response to ${message.name}, sending `, res);
+				logHere(`In response to ${message.name}, sending `, res);
 				sendResponse(res);
 			});
 			return true;
@@ -541,17 +585,47 @@ UA.runtime.onMessage.addListener(
 	}
 )
 
+// @ts-ignore
+window.sendMessage = messageTabs;
+
 async function handleMessage(message: ToBgMessages): Promise<unknown> {
 	if (!message.toBg) {
 		return;
 	}
 	switch (message.name) {
-		case "toBg_getConfig": 
+		case 'toBg_getConfig': 
 			return store.actualConfig;
 
 		case 'toBg_getState':
 			return playerState;
 
+		case 'toBg_getBookmarks':
+			return await getBookmarks(message.data);
+
+		case 'toBg_getStations':
+			return await getStations(message.data);
+
+		case 'toBg_coverPlayButtonPress':
+		case 'toBg_playButton':
+			messageTabs('toTabs_playButton', undefined);
+			await new Promise((res) => setTimeout(res, 2000));
+			messageTabs('toTabs_resetPlay', playerState.isPaused);
+			return;
+		
+		case 'toBg_skipButton':
+			messageTabs('toTabs_skipButton', undefined);
+			await new Promise((res) => setTimeout(res, 2000));
+			messageTabs('toTabs_resetSkip', undefined);
+			return;
+
+		case 'toBg_removeFromQueue':
+		case 'toBg_seekBarDrag':
+		case 'toBg_setFeedback':
+		case 'toBg_skipButton':
+		case 'toBg_playStation':
+			logHere(`Handled unhandled ${message.name}`)
+			return;
+		
 		default:
 			logHere("Unhandled onMessage: ", message);
 			return;
