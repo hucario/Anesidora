@@ -146,6 +146,7 @@ for (const pane of actualConfig.playerPanes) {
 }
 
 let paneOn: number;
+let hideTimeout: number;
 
 if (actualConfig.defaultPane) {
 	const index = actualConfig.playerPanes.indexOf(actualConfig.defaultPane);
@@ -184,7 +185,11 @@ function showPane(to: number) {
 
 	paneOn = toUsed;
 
-	setTimeout(() => {
+	// Using `window.` so that TS doesn't default to Node's timeout methods
+	if (hideTimeout) {
+		window.clearTimeout(hideTimeout);
+	}
+	hideTimeout = window.setTimeout(() => {
 		for (let i = 0; i < panesParent.children.length; i++) {
 			if (i === paneOn) {
 				continue;
