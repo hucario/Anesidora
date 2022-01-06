@@ -12,8 +12,7 @@ import { AnesidoraConfig, AnesidoraFeedItem, AnesidoraState } from "../../backgr
 import { Message } from "../../messages.js";
 import { setNestedProperty, stripTrackersFromUrl as stripTrackers } from "../../util.js";
 
-let ignoreAutoScroll = false;
-const SMOOTH_SCROLL_TIME = 5000;
+let focusedCover = null;
 
 function throwHere(msg: string): never {
 	console.error(`%ccontrols.ts: "${msg}"`, `
@@ -173,6 +172,14 @@ type TI<
 	AnesidoraConfig['theming']['common']
 )[t];
 
+function ensureInBounds(num: number): number {
+	let covers = document.querySelector('#ct_covers');
+	return Math.min(
+		covers.children.length - 1,
+		Math.max(0, num)
+	)
+}
+
 export default async function SetupControlsPane(
 		config: AnesidoraConfig,
 		message: <expectedResponse>(
@@ -188,6 +195,34 @@ export default async function SetupControlsPane(
 	let state = await message<AnesidoraState>("toBg_getState");
 
 	let ctNodes = buildPane(config, state, message);
+
+	addEventListener("keydown", e => {
+		if (!e.shiftKey) {
+			return;
+		}
+		let covers = document.querySelector('#ct_covers');
+		if (e.key === 'ArrowLeft') {
+			e.preventDefault();
+			covers.children[ensureInBounds(focusedCover)].classList.remove('ct_active');
+			focusedCover = ensureInBounds(focusedCover - 1);
+			covers.children[focusedCover].classList.add('ct_active');
+			covers.children[focusedCover].scrollIntoView({
+				behavior: config.theming.smoothScroll ? 'smooth' : 'auto',
+				inline: 'center',
+				block: 'center'
+			})
+		} else if (e.key === 'ArrowRight') {
+			e.preventDefault();
+			covers.children[ensureInBounds(focusedCover)].classList.remove('ct_active');
+			focusedCover = ensureInBounds(focusedCover + 1);
+			covers.children[focusedCover].classList.add('ct_active');
+			covers.children[focusedCover].scrollIntoView({
+				behavior: config.theming.smoothScroll ? 'smooth' : 'auto',
+				inline: 'center',
+				block: 'center'
+			})
+		}
+	}, { passive: false });
 
 	/*
 	 * Honestly the partial updating is the most complicated part
@@ -369,24 +404,47 @@ export default async function SetupControlsPane(
 				break;
 			
 			case "currentEvent":
-				if (d.new && typeof d.new === 'object' && 'trackToken' in d.new) {
-					ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
-					ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
-					ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
+				if (d.new && typeof d.new === 'object') {
+					if ('trackToken' in d.new) {
+						ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
+						ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
+						ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
 						.innerText = "Play to resume last station";
-					
-					let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
-					let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
-					let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
-	
-					artistLink.href = d.new.artistDetailUrl;
-					artistLink.innerText = d.new.artistName;
-	
-					titleLink.href = d.new.songDetailUrl;
-					titleLink.innerText = d.new.songName;
-	
-					albumLink.href = d.new.albumDetailUrl;
-					albumLink.innerText = d.new.albumName;
+						
+						let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
+						let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
+						let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
+						
+						artistLink.href = d.new.artistDetailUrl;
+						artistLink.innerText = d.new.artistName;
+						
+						titleLink.href = d.new.songDetailUrl;
+						titleLink.innerText = d.new.songName;
+						
+						albumLink.href = d.new.albumDetailUrl;
+						albumLink.innerText = d.new.albumName;
+					} else if (d.new && 'adToken' in d.new) {
+						if (d.new.populated) {
+							ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
+							ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
+							ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
+							.innerText = "Play to resume last station";
+							
+							let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
+							let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
+							let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
+							
+							artistLink.href = d.new.clickThroughUrl;
+							artistLink.innerText = d.new.companyName;
+							
+							titleLink.href = d.new.clickThroughUrl;
+							titleLink.innerText = d.new.title;
+							
+							albumLink.href = d.new.clickThroughUrl;
+							// TODO: Config option for this?
+							albumLink.innerText = "Advertisement";
+						}
+					}
 				} else {
 					ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "";
 					ctNodes.querySelector(".ct_otherButtons").classList.add("ct_nothingPlaying");
@@ -407,23 +465,12 @@ export default async function SetupControlsPane(
 					albumLink.innerText = "";
 				}
 
-				if (!d.old || !(typeof d.old === 'object' && 'trackToken' in d.old)) {
-					let oldCTNodes = ctNodes;
-					ctNodes = buildPane(config, state, message)
-					oldCTNodes.replaceWith(ctNodes);
-					ctNodes.querySelector('#ct_covers .ct_current')?.scrollIntoView({
-						behavior: 'smooth',
-						inline: 'center',
-						block: 'center'
-					})
-				} else {
-					updateCovers(
-						ctNodes.querySelector("#ct_covers"),
-						config,
-						state,
-						message
-					);
-				}
+				updateCovers(
+					ctNodes.querySelector("#ct_covers"),
+					config,
+					state,
+					message
+				);
 				break;
 			
 			case "volume":
@@ -457,14 +504,7 @@ export default async function SetupControlsPane(
 			return;
 		}
 
-		const index = state.comingEvents.findIndex(e => (
-			'adToken' in e ? 
-				e.adToken === reply.data : 
-				('trackToken' in e ?
-					e.trackToken === reply.data :
-					false
-				)
-		));
+		const index = state.comingEvents.findIndex(e => e.uniqueSessionId === reply.data);
 		if (index !== -1) {
 			state.comingEvents.splice(index, 1);
 			updateCovers(
@@ -552,16 +592,19 @@ export default async function SetupControlsPane(
 		if (msg.name !== 'toTabs_updatedFeed') {
 			return;
 		}
-		
-		state.currentEvent = msg.data.curr;
-		state.comingEvents = msg.data.next;
-		state.eventHistory = msg.data.history;
-		state.duration = msg.data.newDuration;
-		state.currentTime = 0;
+		let newState: AnesidoraState = {
+			...state,
+			currentEvent: msg.data.curr,
+			comingEvents: msg.data.next,
+			eventHistory: msg.data.history,
+			duration: msg.data.newDuration,
+			currentTime: 0
+		}
+		state = newState;
 
-		timestamp.innerText = getFormattedTime(state.currentTime);
-		timestamp.innerText += state.duration !== null ?
-			' / ' + getFormattedTime(state.duration)
+		timestamp.innerText = getFormattedTime(newState.currentTime);
+		timestamp.innerText += newState.duration !== null ?
+			' / ' + getFormattedTime(newState.duration)
 			: '';
 
 		seekRange.style.setProperty(
@@ -570,24 +613,47 @@ export default async function SetupControlsPane(
 		)	
 		seekRange.querySelector<HTMLInputElement>("input").valueAsNumber = 0;
 
-		if ('trackToken' in state.currentEvent) {
-			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
-			ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
-			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
+		if (newState.currentEvent && typeof newState.currentEvent === 'object') {
+			if ('trackToken' in newState.currentEvent) {
+				ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
+				ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
+				ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
 				.innerText = "Play to resume last station";
-			
-			let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
-			let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
-			let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
-
-			artistLink.href = state.currentEvent.artistDetailUrl;
-			artistLink.innerText = state.currentEvent.artistName;
-
-			titleLink.href = state.currentEvent.songDetailUrl;
-			titleLink.innerText = state.currentEvent.songName;
-
-			albumLink.href = state.currentEvent.albumDetailUrl;
-			albumLink.innerText = state.currentEvent.albumName;
+				
+				let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
+				let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
+				let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
+				
+				artistLink.href = newState.currentEvent.artistDetailUrl;
+				artistLink.innerText = newState.currentEvent.artistName;
+				
+				titleLink.href = newState.currentEvent.songDetailUrl;
+				titleLink.innerText = newState.currentEvent.songName;
+				
+				albumLink.href = newState.currentEvent.albumDetailUrl;
+				albumLink.innerText = newState.currentEvent.albumName;
+			} else if (newState.currentEvent && 'adToken' in newState.currentEvent) {
+				if (newState.currentEvent.populated) {
+					ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "none";
+					ctNodes.querySelector(".ct_otherButtons").classList.remove("ct_nothingPlaying");
+					ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span")
+					.innerText = "Play to resume last station";
+					
+					let artistLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_artistLink");
+					let titleLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_titleLink");
+					let albumLink = ctNodes.querySelector<HTMLAnchorElement>("#ct_albumLink");
+					
+					artistLink.href = newState.currentEvent.clickThroughUrl;
+					artistLink.innerText = newState.currentEvent.companyName;
+					
+					titleLink.href = newState.currentEvent.clickThroughUrl;
+					titleLink.innerText = newState.currentEvent.title;
+					
+					albumLink.href = newState.currentEvent.clickThroughUrl;
+					// TODO: Config option for this?
+					albumLink.innerText = "Advertisement";
+				}
+			}
 		} else {
 			ctNodes.querySelector<HTMLSpanElement>(".ct_musicInfo > span").style.display = "";
 			ctNodes.querySelector(".ct_otherButtons").classList.add("ct_nothingPlaying");
@@ -611,7 +677,7 @@ export default async function SetupControlsPane(
 		updateCovers(
 			ctNodes.querySelector("#ct_covers"),
 			config,
-			state,
+			newState,
 			message
 		);
 	})
@@ -773,7 +839,7 @@ const ratingButtons: {
 
 // ANCHOR cover html
 const genCover = (
-	e: PandoraSong | PopulatedPandoraAd | UnpopulatedPandoraAd,
+	e: PandoraSong | PopulatedPandoraAd,
 	i: {
 		current: boolean,
 		position: number
@@ -785,12 +851,17 @@ const genCover = (
 		data?: Message['data']
 	) => Promise<expectedResponse>
 ) => {
-
 	let nodes = strToHtml(`
 <div
- data-where="${i.position}"
- id="${'adToken' in e ? e.adToken : e.trackToken}"
- class="ct_cover ${'albumArtUrl' in e && e.albumArtUrl ? '' : 'ct_noCover'} ${i.current ? "ct_current" : ''}"
+ id="${e.uniqueSessionId}"
+ class="ct_cover ${
+	(
+		 ('albumArtUrl' in e && e.albumArtUrl) ||
+		 ('imageUrl' in e && e.imageUrl)
+	) ? 
+		'' : 
+		'ct_noCover'
+	} ${i.current ? "ct_current" : ''}"
 >
 	<div class="ct_info">
 		<span class="ct_position">${i.position > 0 ? (
@@ -798,13 +869,26 @@ const genCover = (
 					"Next song" :
 					`Coming in ${i.position} songs`
 			) : (
-				i.position === 0 ?
+				i.position === -1 ?
 					"Previous song" :
-					`${(i.position+1) * -1} songs ago`
+					`${(i.position) * -1} songs ago`
 		)}</span>
-		<span class="ct_author">${'artistName' in e ? e.artistName : (e.populated ? e.companyName : '')}</span>
-		<span class="ct_songTitle">${'songName' in e ? e.songName : (e.populated ? e.title : 'Advertisement')}</span>
-		<span class="ct_albumTitle">${'albumName' in e ? e.albumName : ''}</span>
+		<span class="ct_author">${
+			'trackToken' in e ?
+				e.artistName :
+				e.companyName
+		}</span>
+		<span class="ct_songTitle">${
+			'trackToken' in e ?
+				e.songName : 
+				e.title
+		}</span>
+		<span class="ct_albumTitle">${
+			'trackToken' in e 
+				? e.albumName :
+				// TODO: Config option for this? Localization?
+				'Advertisement'
+		}</span>
 		<div class="ct_coverActions">
 			${'songRating' in e ? 
 			`<button class="ct_coverLike" alt="Like this track">
@@ -836,7 +920,7 @@ const genCover = (
 						<i class="bx bx-play"></i>
 					</button>` : ""
 				}
-				${ i.position > 0 ? 
+				${ i.position > 0 ? // TODO: Config option for whether this is a thing you can do
 					`<button class="ct_remove">
 						<i class="bx bx-x"></i>
 					</button>` : "" }
@@ -845,18 +929,25 @@ const genCover = (
 	<img
 	 class="ct_actualCover" 
 	 src="${
-		 'albumArtUrl' in e ? 
-		 	(e.albumArtUrl ?? config.theming.common.defaultAlbumCover ?? config.theming.controls.defaultAlbumCover) : 
-			(e.populated ? 
+		 'trackToken' in e ? 
+		 	(e.albumArtUrl && e.albumArtUrl.length !== 0 ?
+				e.albumArtUrl :
+				(
+					config.theming.common.defaultAlbumCover ??
+					config.theming.controls.defaultAlbumCover
+				)
+			) : 
+			e.imageUrl && e.imageUrl.length !== 0 ?
 				e.imageUrl :
-				'' // TODO: Default ad image?? Low priority, as this is unlikely to happen
+				(
+					config.theming.common.defaultAlbumCover ??
+					config.theming.controls.defaultAlbumCover
 				)
 	}"
 	/>
 </div>
 	`)[0];
 
-	const trackToken = 'trackToken' in e ? e.trackToken : e.adToken;
 	const stationToken = state.currentStation;
 
 	const likeButton = nodes
@@ -868,39 +959,32 @@ const genCover = (
 	const playButton = nodes
 	.querySelector<HTMLButtonElement>('.ct_playCover');
 
-	playButton?.addEventListener('click', () => message("toBg_coverPlayButtonPress", trackToken))
-	removeButton?.addEventListener('click', () => message("toBg_removeFromQueue", trackToken))
+	playButton?.addEventListener('click', () => message("toBg_coverPlayButtonPress", e.uniqueSessionId))
+	removeButton?.addEventListener('click', () => message("toBg_removeFromQueue", e.uniqueSessionId))
 	likeButton?.addEventListener("click", () => {
-		message("toBg_setFeedback", {
-			trackToken,
-			stationToken,
-			rating: PandoraRating.THUMBS_UP
-		});
+		if ('trackToken' in e) {
+			message("toBg_setFeedback", {
+				trackToken: e.trackToken,
+				stationToken,
+				rating: PandoraRating.THUMBS_UP
+			});
+		}
 	})
 	dislikeButton?.addEventListener("click", () => {
-		message("toBg_setFeedback", {
-			trackToken,
-			stationToken,
-			rating: PandoraRating.THUMBS_DOWN
-		});
+		if ('trackToken' in e) {
+			message("toBg_setFeedback", {
+				trackToken: e.trackToken,
+				stationToken,
+				rating: PandoraRating.THUMBS_DOWN
+			});
+		}
 	})
 
-	if (likeButton && dislikeButton) {
-		ratingButtons[stationToken + trackToken] = {
+	if (likeButton && dislikeButton && 'trackToken' in e) {
+		ratingButtons[stationToken + e.trackToken] = {
 			likeButton,
 			dislikeButton
 		}
-	}
-
-	if ('adToken' in e || 'trackToken' in e) {
-		generatedCovers[
-			'adToken' in e ? 
-				e.adToken : 
-				('trackToken' in e ?
-					e.trackToken :
-					''
-				)
-		] = nodes;
 	}
 
 	return nodes;
@@ -1016,8 +1100,10 @@ function buildPane(
 
 	} else {
 		let coversNode = ctNodes.querySelector('#ct_covers');
-		[...coversNode.children].forEach(e => coversNode.removeChild(e));
-		if (state.currentEvent && 'songName' in state.currentEvent) {
+		for (let child of coversNode.children) {
+			coversNode.removeChild(child);
+		}
+		if (state.currentEvent && !('eventType' in state.currentEvent)) {
 			coversNode.appendChild(genCover(
 				state.currentEvent, {
 					current: true,
@@ -1033,10 +1119,6 @@ function buildPane(
 	return ctNodes;
 }
 
-const generatedCovers: {
-	[key: string]: HTMLElement
-} = {}
-
 function updateCovers(
 	covers: HTMLDivElement,
 	config: AnesidoraConfig,
@@ -1046,126 +1128,163 @@ function updateCovers(
 		data?: Message['data']
 	) => Promise<expectedResponse>
 ) {
-	const children: HTMLDivElement[] = [];
-	[...covers.children].forEach(e => e instanceof HTMLDivElement && children.push(e));
-
 	const feed: AnesidoraFeedItem[] = [
 		...playerState.eventHistory,
 		playerState.currentEvent,
 		...playerState.comingEvents
 	].filter(e => !!e); // if currentSong is undefined, pop it
 
-	feed.forEach((song, i) => {
-		let elem: HTMLElement;
+	let shouldBeHere = [];
+
+	feed.forEach((item, i) => {
+		shouldBeHere.push(item.uniqueSessionId);
+		let elem: HTMLElement = covers.children[item.uniqueSessionId];
 		const where = (i - playerState.eventHistory.length);
-		const oldElem = generatedCovers[
-			'adToken' in song ? 
-				song.adToken : 
-				('trackToken' in song ?
-					song.trackToken :
-					''
-				)
-		];
-		if (oldElem) {
-			elem = oldElem;
-		}
 		if (!elem) {
-			if ('trackToken' in song) {
-				elem = genCover(song, {
-					position: where,
-					current: where === 0
-				}, config, playerState, message);
-				covers.appendChild(elem);	
-			} else if ('adToken' in song) {
-				// TODO: Ad representations?
-			} else if ('eventType' in song) {
-				switch (song.eventType) {
+			if ('eventType' in item) {
+				switch (item.eventType) {
 					case 'stationChange':
 						// TODO: Options for different stationchange indicators?
 						elem = strToHtml(`
-							<div class="ct_stationChangeIndicator" id="${song.data}">
-								Station change
+							<div class="ct_event ct_stationChangeIndicator" id="${item.uniqueSessionId}">
+								<span class="ct_eventHeader">${
+									item.data.from ? "Station change" : "Station start"
+								}</span>
+								<div class="ct_stationEvent__group ${
+									item.data.from ? '' : 'ct_stationEvent__noStart'
+								}">
+									${item.data.from ? 
+										`<div class="ct_stationEvent__gridGroup">
+											<span class="ct_stationEvent__gridIcon">
+												<i class="bx bx-chevron-left" ></i>
+											</span>
+											<div class="ct_stationEvent__station">
+												<img class="ct_stationEvent__stationIcon" src=${
+													item.data.from?.artUrl ??
+													config.theming.common.defaultAlbumCover ??
+													config.theming.controls.defaultAlbumCover
+												} />
+												<span class="ct_stationEvent__stationName">${
+													item.data.from?.stationName ?? "(None)"
+												}</span>
+											</div>
+										</div>`:
+									''}
+									<div class="ct_stationEvent__gridGroup">
+										<div class="ct_stationEvent__gridSpacer"></div>
+										<div class="ct_stationEvent__station">
+											<span class="ct_stationEvent__stationName">${
+												// TODO: Localization?
+												item.data.to?.stationName ?? "(None)"
+											}</span>
+											<img class="ct_stationEvent__stationIcon" src=${
+												item.data.to?.artUrl ??
+												config.theming.common.defaultAlbumCover ??
+												config.theming.controls.defaultAlbumCover
+											}>
+										</div>
+										<span class="ct_stationEvent__gridIcon">
+											<i class="bx bx-chevron-right" ></i>
+										</span>
+									</div>
+								</div>
 							</div>
 						`)[0]
 						covers.appendChild(elem);
 						break;
 				}
+			} else {
+				elem = genCover(item, {
+					position: where,
+					current: where === 0
+				}, config, playerState, message);
+				covers.appendChild(elem);
 			}
 		} else {
-			if ('trackToken' in song) {
-				elem.querySelector<HTMLElement>(".ct_position").innerText = (
+			// Element exists, just update it
+			let posIndicator = elem.querySelector<HTMLElement>(".ct_position");
+			if (posIndicator) {
+				posIndicator.innerText = (
 					where > 0 ? (
 						where === 1 ?
 							"Next song" :
 							`Coming in ${where} songs`
 					) : (
 						where === -1 ?
-							"Previous song" :
-							`${(where) * -1} songs ago`
+						"Previous song" :
+						`${(where) * -1} songs ago`
 					)
 				);
-				elem.setAttribute("data-where", where + '');
-				if (where < 0) {
-					let remB = elem.querySelector<HTMLButtonElement>('.ct_remove');
-					if (remB) {
-						remB.parentElement.removeChild(remB);
-					}
+			}
+			if (where < 0) {
+				let remB = elem.querySelector<HTMLButtonElement>('.ct_remove');
+				let playB = elem.querySelector<HTMLButtonElement>('.ct_playCover');
+				if (remB) {
+					remB.parentElement.removeChild(remB);
+				}
+				if (playB) {
+					playB.parentElement.removeChild(playB);
 				}
 			}
-		}
-
-		if (where === 0) {
-			elem?.classList.add("ct_current");
-		} else {
-			elem?.classList.remove("ct_current");
-		}
-		if (where > 0) {
-			elem?.classList.add("ct_leftAlign");
-		} else {
-			elem?.classList.remove("ct_leftAlign");
-		}
-	});
-	const feedIds = feed.map(e => (
-		'adToken' in e ? 
-			e.adToken : 
-			('trackToken' in e ?
-				e.trackToken :
-				false
-			)
-	));
-	const toRemove = children.filter(e => !feedIds.includes(e.id) && e.classList.contains('ct_cover'));
-	toRemove.forEach(e => {
-		covers.scrollLeft -= e.clientWidth;
-		e.parentElement && e.parentElement.removeChild(e);
-		if (generatedCovers[e.id]) {
-			delete generatedCovers[e.id]
+			if (where === 0) {
+				elem.classList.add("ct_current");
+			} else {
+				elem.classList.remove("ct_current");
+			}
+			if (where > 0) {
+				elem.classList.add("ct_leftAlign");
+			} else {
+				elem.classList.remove("ct_leftAlign");
+			}
 		}
 	});
-
-	if (config.controlsPane.autoScroll && covers.querySelector(".ct_current")) {
+	for (let child of covers.children) {
+		if (
+			!shouldBeHere.includes(child.id)
+		) {
+			covers.scrollLeft -= child.clientWidth;
+			child.parentElement?.removeChild(child);
+		}
+	}
+	// Why this needs to be done twice?
+	// No clue.
+	// But if I don't then it bugs on station change.
+	// Race condition??
+	for (let child of covers.children) {
+		if (
+			!shouldBeHere.includes(child.id)
+		) {
+			covers.scrollLeft -= child.clientWidth;
+			child.parentElement?.removeChild(child);
+		}
+	}
+	if (config.controlsPane.autoScroll && covers.querySelector('.ct_current')) {
 		// janky as hell
 		// but it doesn't work without two
 		// look I don't know why either
 		// just don't touch it
-		ignoreAutoScroll = true;
 		setTimeout(() => {
-			ignoreAutoScroll = true;
 			covers.querySelector(".ct_current")?.scrollIntoView({
-				behavior: "smooth",
+				behavior: config.theming.smoothScroll ? 'smooth' : 'auto',
 				block: "center",
 				inline: "center"
 			});
 		}, 100);
 		setTimeout(() => {
-			ignoreAutoScroll = true;
 			covers.querySelector(".ct_current")?.scrollIntoView({
-				behavior: "smooth",
+				behavior: config.theming.smoothScroll ? 'smooth' : 'auto',
 				block: "center",
 				inline: "center"
 			});
-			setTimeout(() => {
-				ignoreAutoScroll = false;
-			}, SMOOTH_SCROLL_TIME);
+			let current = covers.querySelector('.ct_current');
+			for (let i = 0; i < covers.children.length; i++) {
+				if (covers.children[i] === current) {
+					covers.children[ensureInBounds(focusedCover)].classList.remove('ct_active');
+					focusedCover = i;
+					break;
+				}
+			}
 		}, 1000);
 	}
 }
+

@@ -45,13 +45,16 @@ window.debugRequests = false;
  *      - WebRequest User-Agent changing
  * 
  * TODO: Settings for custom html/css for elements (stations/covers/controls/etc)?
+ * TODO: Localization?
+ * TODO: Document once done
+ * TODO: "Do not register ads" config option
  */
 
 // ANCHOR Imports, typedefs, constants, util funcs
 
 import * as store from './store.js';
 import { getBrowser, isAndroid } from './platform_specific.js'
-import { AudioInfo, BASE_API_URL, Bookmarks, LinkishString, NumberishString, PandoraPlaylist, PandoraRating, PandoraRequestData, PandoraResponse, PandoraSong, PandoraStation, PandoraTime, PAPIError, PReq, PRes, ResponseOK } from './pandora.js';
+import { AudioInfo, BASE_API_URL, Bookmarks, LinkishString, NumberishString, PandoraPlaylist, PandoraRating, PandoraRequestData, PandoraResponse, PandoraSong, PandoraStation, PandoraTime, PAPIError, PAPI_Method, PopulatedPandoraAd, PReq, PRes, ResponseOK, UnpopulatedPandoraAd } from './pandora.js';
 import { formatParameters, stringToBytes } from './util.js';
 import { decrypt, encrypt } from './crypt.js';
 import type { Message, ToBgMessages, ToTabsMessages } from '../messages.js';
@@ -177,7 +180,7 @@ function calculateSyncTime(manualSync?: {
  * Throws on fail or network error.
  */
 async function sendRequest<t>(
-	method: string, 
+	method: PAPI_Method, 
 	request: PandoraRequestData = {},
 	additionalOpts: {
 		/** Whether or not to use TLS. Overridden by config.forceSecure */
@@ -516,7 +519,16 @@ async function getBookmarks(force = false): Promise<Bookmarks> {
 	}
 }
 
-async function getPlaylist(token: string, starting: boolean) {
+/**
+ * Gets a playlist for a station from Pandora.
+ * Doing this invalidates the play tokens for previous items from that station.
+ * 
+ * @param token The station token to obtain a playlist for.
+ * @param starting Sets `stationIsStarting` to true.
+ * No functional difference in behavior as far as I can tell.
+ * @returns {Promise<store.AnesidoraFeedItem>}
+ */
+async function getPlaylist(token: string, starting: boolean): Promise<store.AnesidoraFeedItem[]> {
 	let req: PReq.station.getPlaylist = {
 		stationToken: token,
 		stationIsStarting: starting,
@@ -530,9 +542,33 @@ async function getPlaylist(token: string, starting: boolean) {
 			req
 		);
 
-		return res.result.items;
+		let resItems: store.AnesidoraFeedItem[] = [];
+		
+		for (let currEvent of res.result.items) {
+			if ('adToken' in currEvent) {
+				if (!store.actualConfig.certification.autoSkipAds) {
+					continue;
+				}
+				if (!currEvent.populated) {
+					try {
+						resItems.push(await fetchAdMetadata(<UnpopulatedPandoraAd>currEvent));
+					} catch(e) {
+						// Unrecoverable - Pandora API doesn't like us right now :(
+					}
+				}
+			} else {
+				let newEvent = <store.AnesidoraFeedItem>currEvent;
+				newEvent.uniqueSessionId = genUniqueID(currEvent.trackToken);
+				resItems.push(newEvent);
+			}
+		}
+
+
+
+		return resItems;
 	} catch(e) {
 		errorHere(`station.getPlaylist: `, new PAPIError(e));
+		throw e;
 	}
 }
 
@@ -590,20 +626,38 @@ async function seekTo(time: number, actuallySeek = true) {
 }
 
 // TODO: AudioSession
-async function updateMediaSession(currSong: PandoraSong) {
+async function updateMediaSession(currSong: store.AnesidoraFeedItem) {
 	let metadata = navigator.mediaSession.metadata;
     
-	if (!metadata || (
-        metadata.title != currSong.songName ||
-        metadata.artist != currSong.artistName ||
-        metadata.artwork[0].src != currSong.albumArtUrl)
-        ) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: currSong.songName,
-            artist: currSong.artistName,
-            artwork: [{ src: currSong.albumArtUrl, sizes: '500x500', type: 'image/jpeg' }]
-        });
-    }
+	if ('trackToken' in currSong) {
+		if (!metadata || (
+			metadata.title != currSong.songName ||
+			metadata.artist != currSong.artistName ||
+			metadata.artwork[0].src != currSong.albumArtUrl)
+			) {
+			navigator.mediaSession.metadata = new MediaMetadata({
+				title: currSong.songName,
+				artist: currSong.artistName,
+				artwork: currSong.albumArtUrl && currSong.albumArtUrl.length !== 0 ?
+					[{ src: currSong.albumArtUrl, sizes: '500x500', type: 'image/jpeg' }] :
+					[]
+			});
+		}
+	} else if ('adToken' in currSong) {
+		if (!metadata || (
+			metadata.title != currSong.title ||
+			metadata.artist != currSong.companyName ||
+			metadata.artwork[0].src != currSong.imageUrl)
+			) {
+			navigator.mediaSession.metadata = new MediaMetadata({
+				title: currSong.title,
+				artist: currSong.companyName,
+				artwork: currSong.imageUrl && currSong.imageUrl.length !== 0 ?
+					[{ src: currSong.imageUrl, sizes: '500x500', type: 'image/jpeg' }] :
+					[]
+			});
+		}
+	}
 
 	if (playerAudio.paused) {
         navigator.mediaSession.playbackState = "paused";
@@ -647,25 +701,122 @@ async function setupMediaSession() {
 	navigator.mediaSession.setActionHandler("previoustrack", () => seekTo(0));
 	navigator.mediaSession.setActionHandler("nexttrack", () => playNextItem());
 }
+let uniqueTokens = new Map<string, number>();
+
+function genUniqueID(token: string) {
+	if (uniqueTokens.has(token)) {
+		uniqueTokens.set(token, uniqueTokens.get(token) + 1);
+		return token + uniqueTokens.get(token);
+	} else {
+		uniqueTokens.set(token, 0);
+		return token + 0;
+	}
+}
+
+async function fetchAdMetadata(ad: UnpopulatedPandoraAd): Promise<PopulatedPandoraAd> {
+	let req = <PReq.ad.getAdMetadata>{
+		adToken: ad.adToken,
+		supportAudioAds: true,
+		returnAdTrackingTokens: true
+	}
+	let res: PRes.ad.getAdMetadata;
+	try {
+		res = (await sendRequest<PRes.ad.getAdMetadata>(
+			'ad.getAdMetadata',
+			req
+		)).result;
+	} catch(e) {
+		throw new PAPIError(e);
+	}
+	if ('audioUrlMap' in res && res.audioUrlMap) {
+		// Typescript
+		let resWithAudioUrlMap = <typeof res & {
+			audioUrlMap: Required<typeof res>['audioUrlMap']
+		}>res;
+		return {
+			...resWithAudioUrlMap,
+			uniqueSessionId: genUniqueID(ad.adToken),
+			populated: true,
+			adToken: ad.adToken
+		};
+	} else {
+		throwHere("Ad did not have audioUrlMap")
+	}
+}
 
 async function playNextItem() {
 	messageTabs('toTabs_skipButton', undefined);
 	if (playerState.currentEvent) {
 		playerState.eventHistory.push(playerState.currentEvent);
 	}
+	let oldCurrEvent = playerState.currentEvent;
 	playerState.currentEvent = null;
 
-	if (playerState.comingEvents.length === 0 && playerState.currentStation) {
-		playerState.comingEvents = await getPlaylist(playerState.currentStation, false);
-	} else if (playerState.comingEvents.length === 0) {
-		return;
+	if (playerState.comingEvents.length === 0) {
+		if (playerState.currentStation) {
+			playerState.comingEvents = await getPlaylist(playerState.currentStation, false);
+		} else if (store.actualConfig.lastUsedStation) {
+			messageTabs('toTabs_stateChanged', {
+				key: 'currentStation',
+				newValue: store.actualConfig.lastUsedStation,
+				oldValue: playerState.currentStation
+			})
+			playerState.currentStation = store.actualConfig.lastUsedStation;
+			playerState.comingEvents = await getPlaylist(store.actualConfig.lastUsedStation, false);
+		} else {
+			messageTabs('toTabs_resetSkip', undefined);
+			return;
+		}
 	}
 	playerState.currentEvent = playerState.comingEvents.shift();
 
 	let currEvent = playerState.currentEvent;
 
 	if ('adToken' in currEvent) {
-		// TODO: Check for whether playing ads, and do so.
+		if (store.actualConfig.certification.autoSkipAds) {
+			return await playNextItem();
+		}
+		playerState.currentEvent = currEvent;
+
+		if (currEvent.adTrackingTokens) {
+			for (let t of currEvent.adTrackingTokens) {
+				try {
+					await sendRequest(
+						'ad.registerAd',
+						<PReq.ad.registerAd>{
+							stationId: playerState.currentStation,
+							adTrackingTokens: t
+						}
+					);
+				} catch(e) {
+					// We really don't care if this errors.
+					// It's optional in the first place.
+				}
+			}
+		}
+
+		// TODO: Config option for preference on high/med/low quality audio
+		// TODO: Preloading?
+		playerAudio.src =
+			currEvent.audioUrlMap.highQuality?.audioUrl ??
+			currEvent.audioUrlMap.mediumQuality?.audioUrl ??
+			currEvent.audioUrlMap.lowQuality?.audioUrl;
+
+		try {
+			await playerAudio.play();
+		} catch(e) {
+			return await playNextItem();
+		} finally {
+			updateMediaSession(currEvent);
+			playerState.duration = playerAudio.duration;
+			messageTabs("toTabs_updatedFeed", {
+				history: playerState.eventHistory,
+				curr: playerState.currentEvent,
+				next: playerState.comingEvents,
+				newDuration: playerAudio.duration
+			})
+			messageTabs('toTabs_resetSkip', undefined);
+		}
 	} else if ('trackToken' in currEvent) {
 		// TODO: Config option for preference on high/med/low quality audio
 		// TODO: Preloading?
@@ -703,7 +854,7 @@ async function playNextItem() {
 		}
 		switch (currEvent.eventType) {
 			case 'stationChange':
-				playStation(currEvent.data)
+				playStation(currEvent.data.to.stationToken);
 				return;
 		}
 	}
@@ -711,30 +862,45 @@ async function playNextItem() {
 }
 
 async function playStation(token: string) {
+	let oldStation = await getStation(playerState.currentStation);
+	let newStation = await getStation(token);
+	if (!newStation) {
+		return;
+	}
 	playerState.currentStation = token;
 	store.set('lastUsedStation', token);
 	messageTabs('toTabs_playingStation', token);
-
-	let playlist = await getPlaylist(token, true);
-	playerState.comingEvents = playlist;
-	await playNextItem();
+	playerState.comingEvents = await getPlaylist(token, true);
+	if (playerState.currentEvent) {
+		playerState.eventHistory.push(playerState.currentEvent);
+	}
+	playerState.currentEvent = null;
 	playerState.eventHistory.push({
 		isEvent: true,
 		eventType: 'stationChange',
 		handledYet: true,
-		data: token
+		data: {
+			from: oldStation,
+			to: newStation
+		},
+		uniqueSessionId: genUniqueID(token)
 	})
-	messageTabs("toTabs_updatedFeed", {
-		history: playerState.eventHistory,
-		curr: playerState.currentEvent,
-		next: playerState.comingEvents,
-		newDuration: playerAudio.duration
-	})
+	await playNextItem();
 	messageTabs('toTabs_stationResolved', token);
 }
 
 
 const cachedStations = new TimedCache<string, PandoraStation[]>(1000 * 30);
+
+async function getStation(token: string): Promise<PandoraStation | null> {
+	let stations = await getStations(false);
+	let station = stations.find(e => e.stationToken === token);
+	if (station) {
+		return station;
+	} else {
+		return null;
+	}
+}
 
 async function getStations(force=false): Promise<PandoraStation[]> {
 	if (!currentAccount || !currentAccount.populated) {
@@ -893,14 +1059,9 @@ async function handleMessage(message: ToBgMessages): Promise<unknown> {
 			return;
 
 		case 'toBg_removeFromQueue':
-			let i = playerState.comingEvents.findIndex(event => (
-				('trackToken' in event) ?
-					event.trackToken === message.data :
-					(
-						('adToken' in event) ?
-							event.adToken === message.data : false
-					)
-			));
+			let i = playerState.comingEvents.findIndex(
+				event => event.uniqueSessionId === message.data
+			);
 			if (i !== -1) {
 				playerState.comingEvents.splice(i, 1);
 				messageTabs('toTabs_removedFromQueue', message.data);

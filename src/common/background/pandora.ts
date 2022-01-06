@@ -48,7 +48,11 @@ export enum PandoraRating {
 	THUMBS_DOWN = -1
 }
 
-export type PandoraSong = {
+export type PandoraSong = PandoraSongNoId & {
+	uniqueSessionId: string
+}
+
+export type PandoraSongNoId = {
 	trackToken: string,
 	artistName: string,
 	albumName: string,
@@ -94,6 +98,7 @@ export type UnpopulatedPandoraAd = {
 
 export type PopulatedPandoraAd = {
 	populated: true,
+	uniqueSessionId: string,
 	adToken: string,
 	clickThroughUrl: LinkishString,
 	imageUrl: LinkishString,
@@ -150,7 +155,7 @@ export type PandoraStation = {
 	allowEditDescription: boolean
  }
 
-export type PandoraPlaylist = Array<PandoraSong | UnpopulatedPandoraAd>;
+export type PandoraPlaylist = Array<PandoraSongNoId | UnpopulatedPandoraAd>;
 
 
 export type PandoraAudioFormat = 
@@ -1054,6 +1059,41 @@ export class PAPIError extends Error {
 		this.humanCode = PAPI_ERRORS[opts.code];
 	}
 }
+
+export type PAPI_Method = (
+	"ad.getAdMetadata" |
+	"ad.registerAd" |
+	"auth.partnerLogin" |
+	"auth.userLogin" |
+	"bookmark.addArtistBookmark" |
+	"bookmark.addSongBookmark" |
+	"music.search" |
+	"station.addFeedback" |
+	"station.addSeed" |
+	"station.createStation" |
+	"station.deleteFeedback" |
+	"station.deleteMusic" |
+	"station.deleteStation" |
+	"station.getGenreStations" |
+	"station.getGenreStationsChecksum" |
+	"station.getPlaylist" |
+	"station.getStation" |
+	"station.renameStation" |
+	"station.shareStation" |
+	"station.transformSharedStation" |
+	"test.checkLicensing" |
+	"track.explainTrack" |
+	"user.canSubscribe" |
+	"user.changeSettings" |
+	"user.createUser" |
+	"user.getBookmarks" |
+	"user.getSettings" |
+	"user.getStationList" |
+	"user.getStationListChecksum" |
+	"user.setQuickMix" |
+	"user.sleepSong" |
+	"user.validateUsername"
+)
 
 /**
  * Known Pandora API error codes. Use {@link PAPIError} when actually _throwing_ one.

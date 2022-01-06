@@ -1,5 +1,5 @@
 import { PandoraStation } from "../../background/pandora.js";
-import { AnesidoraConfig } from "../../background/store.js";
+import { AnesidoraConfig, AnesidoraState } from "../../background/store.js";
 import { Message } from "../../messages.js";
 
 
@@ -56,18 +56,22 @@ export default async function SetupStationsPane(
 			fn: (data: Message) => void
 		) => void
 	): Promise<HTMLElement> {
-	let stNodes = await buildPane(config, message);
+	const state = await message<AnesidoraState>("toBg_getState");
+	let stNodes = await buildPane(config, state, message);
+
+	
 	return stNodes;
 }
 
 async function buildPane(
 	config: AnesidoraConfig,
+	state: AnesidoraState,
 	message: <expectedResponse>(
 		name: Message['name'],
 		data?: Message['data']
 	) => Promise<expectedResponse>
 ): Promise<HTMLElement> {
-	const stNodes = strToHtml(stationsPaneHtml)[0];
+	const stNodes = strToHtml(stationsPaneHtml(state, config))[0];
 
 	const theme = {
 		...config.theming.stations,
@@ -83,10 +87,12 @@ async function buildPane(
 	);
 
 	const stations: PandoraStation[] = await message("toBg_getStations");
-
+	const holder = stNodes.querySelector('.st_stationsHolder');
+	const stationsElems = {};
 	for (let i = 0; i < stations.length; i++) {
 		const elem = strToHtml(stationHtml(
 			stations[i],
+			state,
 			config
 		))[0];
 
@@ -96,7 +102,8 @@ async function buildPane(
 			message("toBg_playStation", stations[i].stationToken);
 		})
 
-		stNodes.appendChild(elem);
+		stationsElems[stations[i].stationId] = elem;
+		holder.appendChild(elem);
 	}
 
 
@@ -105,21 +112,31 @@ async function buildPane(
 }
 
 
-const stationsPaneHtml = `
+const stationsPaneHtml = (s: AnesidoraState, c: AnesidoraConfig) => (`
 	<div class="pane stations">
+		${c.theming.stations.showHeader ? 
+		`<span class="st_stationsHeader">
+				${
+					// TODO: Localization?
+					"Stations"
+				}
+			</span>
+		` : ''}
+		<div class="st_stationsHolder">
 
+		</div>
 	</div>
-`
+`)
 
-const stationHtml = (s: PandoraStation, c: AnesidoraConfig) => (`
+const stationHtml = (i: PandoraStation, s: AnesidoraState, c: AnesidoraConfig) => (`
 	<button class="st_station">
 		<img
 		 class="st_img"
 		 src="${
-			s.artUrl ?? 
+			i.artUrl ?? 
 				c.theming.common.defaultAlbumCover ??
 				c.theming.stations.defaultAlbumCover
 			}" />
-		<span class="st_name">${s.stationName}</span>
+		<span class="st_name">${i.stationName}</span>
 	</button>
 `)

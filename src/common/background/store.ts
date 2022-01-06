@@ -17,13 +17,13 @@
 
 
 import { getNestedProperty, setNestedProperty } from "../util.js";
-import { LinkishString, NumberishString, UnpopulatedPandoraAd, PandoraSong, PandoraTime, PopulatedPandoraAd } from "./pandora.js";
+import { LinkishString, NumberishString, UnpopulatedPandoraAd, PandoraSong, PandoraTime, PopulatedPandoraAd, PandoraStation } from "./pandora.js";
 
 // ANCHOR: Typedefs and constants
 
 const ANESIDORA_NAMESPACE = "anesidoraSettings";
 
-export type AnesidoraFeedItem = PandoraSong | UnpopulatedPandoraAd | PopulatedPandoraAd | AnesidoraEvent;
+export type AnesidoraFeedItem = PandoraSong | PopulatedPandoraAd | AnesidoraEvent;
 
 
 export type AnesidoraEvent = (
@@ -31,6 +31,7 @@ export type AnesidoraEvent = (
 		isEvent: true,
 		eventType: string,
 		handledYet: boolean,
+		uniqueSessionId: string,
 		data?: unknown
 	} & StationChangeEvent
 );
@@ -38,7 +39,10 @@ export type AnesidoraEvent = (
 type StationChangeEvent = {
 	eventType: "stationChange",
 	/** Token */
-	data: string
+	data: {
+		from: PandoraStation,
+		to: PandoraStation
+	}
 }
 
 
@@ -129,14 +133,23 @@ export type AnesidoraConfig = {
 	activeAccount: string | null,
 	stripTrackers: boolean,
 
+	certification: {
+		autoSkipAds: boolean
+	},
+
 	playerPanes: validPanes[],
 
 	theming: {
 		/** Needs to be in static terms, not relative units */
 		popupWidth: `${number}px`,
 		popupHeight: `${number}px`,
-		common: Partial<CommonThemingOptions>
+		common: Partial<CommonThemingOptions>,
+		smoothScroll: boolean,
 		stations: {
+
+			showHeader: boolean,
+			gridOptions: BookmarksGridOptions,
+			mode: 'squares' | 'widesquares'
 
 		} & CommonThemingOptions;
 		bookmarks: {
@@ -207,6 +220,9 @@ const defaultConfig: AnesidoraConfig = {
 	lastUsedStation: null,
 	stripTrackers: true,
 	defaultPane: "controls",
+	certification: {
+		autoSkipAds: false
+	},
 	bookmarksPane: {
 		uniqueOption: true
 	},
@@ -214,12 +230,21 @@ const defaultConfig: AnesidoraConfig = {
 		autoScroll: true
 	},
 	theming: {
+		smoothScroll: false,
 		stations: {
 			defaultAlbumCover: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPkL5v/HwAD5QIlaA51ZwAAAABJRU5ErkJggg==",
 			padding: "0",
 			backgroundColor: "rgba(0,0,0,1)",
 			accentColor: "rgba(255,188,0,1)",
-			textColor: "rgba(255,255,255,1)"
+			textColor: "rgba(255,255,255,1)",
+
+			showHeader: true,
+			mode: 'widesquares',
+			gridOptions: {
+				columns: 3,
+				gap: '1rem',
+				imgSize: '2rem'
+			}
 		},
 		controls: {
 			defaultAlbumCover: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPkL5v/HwAD5QIlaA51ZwAAAABJRU5ErkJggg==",
@@ -352,7 +377,7 @@ type RecursivePartial<T> = {
 };
 
 try {
-	let existingParsed: Partial<AnesidoraConfig> | null = null;
+	let existingParsed: RecursivePartial<AnesidoraConfig> | null = null;
 	const existing = localStorage.getItem(
 		ANESIDORA_NAMESPACE
 	);
