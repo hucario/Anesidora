@@ -1,27 +1,38 @@
 "use strict"
 /*global partnerLogin, getPlaylist, currentPlaylist, platform_specific, get_browser, is_android*/
-/*exported setCallbacks, play, downloadSong, nextSongStation, mp3Player*/
+/*exported setCallbacks, play, downloadSong, playStation, mp3Player*/
+
+get_browser().runtime.onInstalled.addListener(async () => {
+    const rules = [
+        {
+            id: 1,
+            action: {
+                type: 'modifyHeaders',
+                requestHeaders: [{
+                    header: "User-Agent",
+                    operation: "set",
+                    value: "libcurl"
+                }],
+            },
+            condition: {
+                domains: [get_browser().runtime.id],
+                urlFilter: '|tuner.pandora.com',
+                resourceTypes: ['xmlhttprequest'],
+            },
+        }
+    ];
+    await get_browser().declarativeNetRequest.updateDynamicRules({
+        removeRuleIds: rules.map(r => r.id),
+        addRules: rules,
+    });
+});
+
+let usedPopup = localStorage.getItem("whichPlayer") === "old" ? "old.htm" : "new.htm";
+get_browser().browserAction.setPopup({
+    popup: usedPopup
+});
 
 let mp3Player = document.getElementById('mp3Player');
-
-get_browser().webRequest.onBeforeSendHeaders.addListener(
-    function(details) {
-        const h = details.requestHeaders;
-        for (let header of h) {
-            if (header.name.toLowerCase() === "user-agent") {
-                header.value = "libcurl";
-            }
-        }
-        return {requestHeaders: h};
-    },
-    {
-        urls: [
-            "http://*.pandora.com/services/json/*",
-            "https://*.pandora.com/services/json/*",
-        ]
-    },
-    ['blocking', 'requestHeaders']
-);
 
 var callbacks = {
     updatePlayer: [],
@@ -29,11 +40,15 @@ var callbacks = {
     downloadSong: []
 };
 var currentSong;
-var comingSong;
 var prevSongs = [];
-var stationImgs = (localStorage.stationImgs && JSON.parse(localStorage.stationImgs)) || {
 
-};
+function toHTTPS(url) {
+    if (!url) { return url; }
+    if (localStorage.getItem('forceSecure') === 'true') {
+        return url.replace('http://', 'https://');
+    }
+    return url;
+}
 
 function setCallbacks(updatePlayer,drawPlayer,downloadSong){
     callbacks.updatePlayer.push(updatePlayer);
@@ -41,124 +56,141 @@ function setCallbacks(updatePlayer,drawPlayer,downloadSong){
     callbacks.downloadSong.push(downloadSong);
 }
 
-async function play(stationToken) {
-    if (stationToken !== localStorage.lastStation) {
-        currentSong = undefined;
-        await getPlaylist(stationToken);
-        //adding this so album covers get on the right location
-        let prev_station = localStorage.lastStation;
-        localStorage.lastStation = stationToken;
-        await nextSong(1, prev_station);
+async function play() {
+    if (mp3Player.currentTime > 0) {
+        mp3Player.play();
     } else {
-        if (currentSong === undefined) {
-            await getPlaylist(localStorage.lastStation);
-        }
-        if (mp3Player.currentTime > 0) {
-            mp3Player.play();
-        } else {
-            await nextSong();
-        }
+        await nextSong();
     }
 }
 
-async function nextSongStation(station) {
-    //adding this so album covers get on the right location
-    let prev_station = localStorage.lastStation;
-    localStorage.lastStation = station;
-    await getPlaylist(localStorage.lastStation);
-    comingSong = undefined;
-    //adding this so album covers get on the right location
-    nextSong(1, prev_station);
+const MAX_PLAYTIME_BEFORE_SONG_RESTART = 4; // in seconds
+
+async function seekBack() {
+    if (mp3Player?.currentTime > MAX_PLAYTIME_BEFORE_SONG_RESTART) {
+        await restartSong();
+    } else {
+        await replaySong(prevSongs[0], true);
+    }
 }
 
-async function nextSong(depth=1, prev_station=undefined) {
-    if (depth > 4){
+async function restartSong() {
+    if (mp3Player.currentTime === 0) {
         return;
     }
-    if (!prev_station) {
-        //if the "prev_station" does not have a definition
-        //then we didn't swap, use the existing one
-        prev_station = localStorage.lastStation;
-    }
 
-    /* I (hucario) put this over here so that history and station art works for every song change. */
+    mp3Player.currentTime = 0;
+}
+
+async function replaySong(track, pushForwards=false) {
+    if (!track) {
+        return;
+    }
     if (currentSong) {
-        stationImgs[prev_station] = (currentSong.albumArtUrl || stationImgs[prev_station]) || undefined; 
-        localStorage.stationImgs = JSON.stringify(stationImgs);
-        if (currentSong != prevSongs[prevSongs.length-1]) {
-            prevSongs.push(currentSong);
-            while(prevSongs.length > localStorage.historyNum){
-                prevSongs.shift();
+        // If skipping back through history linearly,
+        // we want "discarded" songs to go back into "next songs queue" - currentPlaylist
+        // so that going forward plays them again, in order.
+
+        // If we're playing selected tracks from the history,
+        // we want to "discard" the songs onto the top of history,
+        // as no linear direction is inferred.
+        if (pushForwards) {
+            if (currentSong != currentPlaylist[0]) {
+                currentPlaylist.unshift(currentSong);
+            }
+        } else {
+            if (currentSong != prevSongs[0]) {
+                prevSongs.unshift(currentSong);
             }
         }
     }
 
-    if (!currentPlaylist || currentPlaylist.length === 0) {
-        await getPlaylist(localStorage.lastStation);
-    }
+    currentSong = track;
 
-    if (comingSong === undefined && currentPlaylist.length > 0) {
-        comingSong = currentPlaylist.shift();
+    let prevIndex = prevSongs.indexOf(track);
+    if (prevIndex !== -1) {
+        prevSongs.splice(prevIndex, 1);
     }
-    currentSong = comingSong;
-
-    //in case the most recent shift emptied the playlist
-    if (currentPlaylist.length === 0) {
-        await getPlaylist(localStorage.lastStation);
-    }
-    comingSong = currentPlaylist.shift();
-
+    
     let song_url;
-    if (currentSong.additionalAudioUrl != null) {
-        song_url = currentSong.additionalAudioUrl;
+    if (currentSong.additionalAudioUrl != null && ('0' in currentSong.additionalAudioUrl)) {
+        song_url = currentSong.additionalAudioUrl[0];
     } else {
         song_url = currentSong.audioUrlMap.highQuality.audioUrl;
     }
-    mp3Player.setAttribute("src", song_url);
+    mp3Player.src = song_url;
     mp3Player.play();
 
-    var xhr = new XMLHttpRequest();
-    xhr.open("HEAD", song_url);
-    xhr.onerror = function () {
-        nextSong(depth + 1);
-    };
-    xhr.onload = function() {
-        if (xhr.status >= 300){
-            //purge the current list, then run this function again
-            nextSong(depth + 1);
-        }
+    if (currentPlaylist[0]?.albumArtUrl) {
+        let preloadImage = new Image();
+        let fullImage = toHTTPS(currentPlaylist[0].albumArtUrl);
+        let smallImage = fullImage.replace('1080W_1080H', '500W_500H');
+        preloadImage.addEventListener("error", () => {
+            preloadImage.src = fullImage;
+        }, { once: true });
+        preloadImage.src = smallImage;
+    }
 
-        if (localStorage.notifications === "true") {
-            var options = {
-                type: "list",
-                title: "Now playing:\r\n" + currentSong.artistName + " - " + currentSong.songName,
-                message: "by " + currentSong.artistName,
-                eventTime: 5000,
-                items: [
-                    { title: "", message: "Coming next: " },
-                    { title: "", message: comingSong.artistName + " - " + comingSong.songName }
-                ]
-            };
+    updatePlayers();
+}
 
-            var xhr2 = new XMLHttpRequest();
-            xhr2.open("GET", currentSong.albumArtUrl);
-            xhr2.responseType = "blob";
-            xhr2.onload = function(){
-                var blob = this.response;
-                options.iconUrl = window.URL.createObjectURL(blob);
-            };
-            xhr2.send(null);
-        }
+async function playStation(stationToken) {
+    if (stationToken === currentStationToken) {
+        return;
+    }
+    localStorage.setItem('lastStation', stationToken);
+    currentStationToken = stationToken;
+    currentPlaylist = [];
+    await getPlaylist(stationToken);
+    await nextSong();
+}
 
-        callbacks.updatePlayer.forEach((e) => {
-            try {
-                e();
-            } catch(b) {
-                callbacks.updatePlayer.splice(callbacks.updatePlayer.indexOf(e), 1);
+async function nextSong(depth=1) {
+    if (depth > 4){
+        return;
+    }
+    if (currentSong) {
+        if (currentSong != prevSongs[0]) {
+            prevSongs.unshift(currentSong);
+
+            if (prevSongs.length > localStorage.historyNum) {
+                prevSongs.splice(localStorage.historyNum, prevSongs.length - (localStorage.historyNum ?? 25));
             }
-        });
-    };
-    xhr.send();
+        }
+    }
+    if (!currentStationToken) {
+        currentStationToken = localStorage.getItem('lastStation');
+    }
+
+    if (currentPlaylist.length < 2) {
+        // Want one for "next" (soon to be this) song,
+        // and one to preload one after that 
+        await getPlaylist(currentStationToken);
+    }
+
+    currentSong = currentPlaylist.shift();
+    
+
+    let song_url;
+    if (currentSong.additionalAudioUrl != null && ('0' in currentSong.additionalAudioUrl)) {
+        song_url = currentSong.additionalAudioUrl[0];
+    } else {
+        song_url = currentSong.audioUrlMap.highQuality.audioUrl;
+    }
+    mp3Player.src = song_url;
+    mp3Player.play();
+
+    if (currentPlaylist[0]?.albumArtUrl) {
+        let preloadImage = new Image();
+        let fullImage = toHTTPS(currentPlaylist[0].albumArtUrl);
+        let smallImage = fullImage.replace('1080W_1080H', '500W_500H');
+        preloadImage.addEventListener("error", () => {
+            preloadImage.src = fullImage;
+        }, { once: true });
+        preloadImage.src = smallImage;
+    }
+
+    updatePlayers();
 }
 
 function setup_commands() {
@@ -168,7 +200,7 @@ function setup_commands() {
                 if (!mp3Player.paused) {
                     mp3Player.pause();
                 } else {
-                    play(localStorage.lastStation);
+                    play();
                 }
             } else if(command === "skip_song") {
                 nextSong();
@@ -182,19 +214,10 @@ function setup_mediasession() {
         return;
     }
 
-    navigator.mediaSession.setActionHandler("play", async function() {
-        if(mp3Player.paused) {
-            play(localStorage.lastStation);
-        }
-    });
-    navigator.mediaSession.setActionHandler("pause", async function() {
-        if(!mp3Player.paused) {
-            mp3Player.pause();
-        }
-    });
-    navigator.mediaSession.setActionHandler("nexttrack", async function() {
-        nextSong();
-    });
+    navigator.mediaSession.setActionHandler("play", play);
+    navigator.mediaSession.setActionHandler("pause", () => mp3Player.pause());
+    navigator.mediaSession.setActionHandler("previoustrack", seekBack);
+    navigator.mediaSession.setActionHandler("nexttrack", () => nextSong());
     navigator.mediaSession.setActionHandler("seekto", function(details) {
         mp3Player.currentTime = details.seekTime;
     });
@@ -239,16 +262,22 @@ function update_mediasession() {
     }
 }
 
+const updatePlayers = () => {
+    update_mediasession();
+    callbacks.updatePlayer.forEach((e) => {
+        try {
+            e();
+        } catch(b) {
+            callbacks.updatePlayer.splice(callbacks.updatePlayer.indexOf(e), 1);
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     mp3Player = document.getElementById('mp3Player');
-    
-    if (localStorage.volume) {
-        mp3Player.volume = localStorage.volume;
-    } else {
-        mp3Player.volume = 0.1;
-    }
+    mp3Player.volume = 1;
 
-    platform_specific(get_browser());
+    platform_specific();
 
     setup_commands();
 
@@ -256,48 +285,39 @@ document.addEventListener('DOMContentLoaded', function () {
 
     mp3Player = document.getElementById('mp3Player');
 
-    mp3Player.addEventListener("play", function () {
-        try {
-            //check if the window exists
-            document.getElementById('mp3Player').yep = 'thisexists'        
-            callbacks.updatePlayer.forEach((e) => {
-                try {
-                    e();
-                } catch(b) {
-                    callbacks.updatePlayer.splice(callbacks.updatePlayer.indexOf(e), 1);
-                }
-            });
-            currentSong.startTime = Math.round(new Date().getTime() / 1000);
-            update_mediasession();
-        } catch (e) {
-            //if it doesn"t exist, don"t draw here
-            return;
-        }
-    });
-    mp3Player.addEventListener("pause", function () {
-        update_mediasession();
-    });
+    mp3Player.addEventListener("play", updatePlayers);
+    mp3Player.addEventListener("pause", updatePlayers);
+    mp3Player.addEventListener("canplay", updatePlayers);
     mp3Player.addEventListener("ended", function () {
-        nextSong();
-        update_mediasession();
+        nextSong().then(update_mediasession);
     });
     mp3Player.addEventListener("timeupdate", function () {
         update_mediasession();
-        try {
-            //check if the window exists
-            document.getElementById('mp3Player').yep = 'thisexists'
-            callbacks.drawPlayer.forEach((e) => {
-                try {
-                    e();
-                } catch(b) {
-                    callbacks.drawPlayer.splice(callbacks.drawPlayer.indexOf(e), 1);
-                }
-            });
-        } catch(e){
-            //if it doesn"t, don"t draw here
+        callbacks.drawPlayer.forEach((e) => {
+            try {
+                e();
+            } catch(b) {
+                callbacks.drawPlayer.splice(callbacks.drawPlayer.indexOf(e), 1);
+            }
+        });
+    });
+    // small rate limit.
+    // should not affect manual skips
+    let lastError = Date.now();
+    let waitingOnSkip = false;
+    let MIN_ERRORSKIP_DELAY = 2000;
+    mp3Player.addEventListener("error", () => {
+        if (waitingOnSkip) {
             return;
         }
-    });
-    mp3Player.addEventListener("error", function () {
+        if (lastError > (Date.now() - MIN_ERRORSKIP_DELAY)) {
+            waitingOnSkip = true;
+            setTimeout(() => {
+                waitingOnSkip = false;
+                nextSong().then(update_mediasession);
+            }, MIN_ERRORSKIP_DELAY - (Date.now() - lastError))
+        } else {
+            nextSong().then(update_mediasession);
+        }
     });
 });

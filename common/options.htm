@@ -1,44 +1,401 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html>
     <head>
         <meta charset="utf-8">
         <title>Anesidora Options</title>
-        <script type="text/javascript" src="./js/platform_specific.js"></script>
-        <link href="./css/options.css" rel="stylesheet" type="text/css">
-        <link href="./css/preview.css" rel="stylesheet" type="text/css">
-        <link href="./css/oldpreview.css" rel="stylesheet" type="text/css">
-        <link href="css/anesidora/jquery-ui-1.8.6.custom.css" rel="stylesheet" type="text/css" />
+        <link rel="preload" href="./css/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+        <!-- Crossorigin despite being local because https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/preload#cors-enabled_fetches -->
+        <link  href="./css/common.css" rel="stylesheet" type="text/css" />
+        <link  href="./css/options.css" rel="stylesheet" type="text/css">
+        <link  href="./css/newpopup.css" rel="stylesheet" type="text/css">
+        <link  href="./css/reworked_oldpopup.css" rel="stylesheet" type="text/css">
+        <script src="./js/platform_specific.js" type="text/javascript"></script>
+        <script src="./js/common.js" type="text/javascript"></script>
     </head>
     <body>
+        <form id="mainForm">
+            <h1>Settings</h1>
+            <section class="appearance">
+                <input class="fancyRadio sr-only" type="radio" name="playerType" value="new" id="playerType-new" />
+                <input class="fancyRadio sr-only" type="radio" name="playerType" value="old" id="playerType-old" />
+    
+                <div class="controls">
+                    <h2>Appearance</h2>
 
-    <iframe id="preview" src="./popup.htm" loading="eager" importance="high"></iframe>
+                    <div class="sr-only">
+                        <span>Player type:</span>
+                        <label class="fancyRadio-label" for="playerType-new">
+                            Large
+                        </label>
+                        <label class="fancyRadio-label" for="playerType-old">
+                            Compact
+                        </label>
+                    </div>
+                    <div class="quick-theme-select">
+                    </div>
 
+                    <h3>Preset info</h3>
+                    <label for="preset-name">
+                        <div class="labeltext">Name</div>
+                        <input type="text" id="preset-name" name="preset-name">
+                    </label>
+                    <label for="color-scheme-type" class="halign">
+                        <input id="color-scheme-type" type="checkbox" name="color-scheme-type">
+                        <div class="labeltext">Preset is dark</div>
+                    </label>
+
+                    <h3>Colors</h3>
+                    <div class="colors centertext">
+                        <label for="background-color">
+                            <div class="labeltext">Background</div>
+                            <input id="background-color" type="color" name="background-color">
+                        </label>
+                        <label for="text-color">
+                            <div class="labeltext">Text</div>
+                            <input id="text-color" type="color" name="text-color">
+                        </label>
+                        <label for="tab-navigation-background-color">
+                            <div class="labeltext">Navigation background</div>
+                            <input id="tab-navigation-background-color" type="color" name="tab-navigation-background-color">
+                        </label>
+                        <label for="tab-navigation-text-color">
+                            <div class="labeltext">Navigation text</div>
+                            <input id="tab-navigation-text-color" type="color" name="tab-navigation-text-color">
+                        </label>
+                    </div>
+                    <h3>Icon colors</h3>
+                    <div class="colors centertext">
+                        <label for="icon-default-background-color">
+                            <div class="labeltext">Icon fill</div>
+                            <input id="icon-default-background-color" type="color" name="icon-default-background-color">
+                        </label>
+                        <label for="icon-default-color">
+                            <div class="labeltext">Icon stroke</div>
+                            <input id="icon-default-color" type="color" name="icon-default-color">
+                        </label>
+                        <label for="icon-active-background-color">
+                            <div class="labeltext">Active icon fill</div>
+                            <input id="icon-active-background-color" type="color" name="icon-active-background-color">
+                        </label>
+                        <label for="icon-active-color">
+                            <div class="labeltext">Active icon stroke</div>
+                            <input id="icon-active-color" type="color" name="icon-active-color">
+                        </label>
+                        <label for="icon-hover-background-color">
+                            <div class="labeltext">Hovered icon fill</div>
+                            <input id="icon-hover-background-color" type="color" name="icon-hover-background-color">
+                        </label>
+                        <label for="icon-hover-color">
+                            <div class="labeltext">Hovered icon stroke</div>
+                            <input id="icon-hover-color" type="color" name="icon-hover-color">
+                        </label>
+                        
+                        <label for="player-icon-color">
+                            <div class="labeltext">Player icon stroke</div>
+                            <input id="player-icon-color" type="color" name="player-icon-color">
+                        </label>
+                        <label for="player-icon-background-color">
+                            <div class="labeltext">Player icon fill</div>
+                            <input id="player-icon-background-color" type="color" name="player-icon-background-color">
+                        </label>
+                        <label for="player-main-icon-color">
+                            <div class="labeltext">Play/pause stroke</div>
+                            <input id="player-main-icon-color" type="color" name="player-main-icon-color">
+                        </label>
+                        <label for="player-main-icon-background-color">
+                            <div class="labeltext">Play/pause fill</div>
+                            <input id="player-main-icon-background-color" type="color" name="player-main-icon-background-color">
+                        </label>
+                        <label for="player-small-icon-color">
+                            <div class="labeltext">Player minor icon stroke</div>
+                            <input id="player-small-icon-color" type="color" name="player-small-icon-color">
+                        </label>
+                        <label for="player-small-icon-background-color">
+                            <div class="labeltext">Player minor icon fill</div>
+                            <input id="player-small-icon-background-color" type="color" name="player-small-icon-background-color">
+                        </label>
+                        <label for="accounts-icon-warning-color">
+                            <div class="labeltext">Update icon failure color</div>
+                            <input id="accounts-icon-warning-color" type="color" name="accounts-icon-warning-color">
+                        </label>
+                        <label for="accounts-icon-success-color">
+                            <div class="labeltext">Update icon success color</div>
+                            <input id="accounts-icon-success-color" type="color" name="accounts-icon-success-color">
+                        </label>
+                    </div>
+                    <!-- 
+                        'history-line-differentiator': 'rgba(128, 128, 128, 0.1)',
+                        'player-main-icon-color': 'var(--icon-default-color)',
+                        'stations-play-background-color': 'rgba(0, 0, 0, 0.5)',
+                        'stations-active-station-background': '#4a90d9',
+                        'stations-active-station-color': 'white',
+                        'accounts-tooltip-background-color': '#111',
+                    -->
+
+                    <h3>Text</h3>
+                    <div class="halign-if-possible">
+                        <label for="font-family">
+                            <div class="labeltext">Font family</div>
+                            <input id="font-family" type="text" name="font-family">
+                        </label>
+                        <label for="font-size">
+                            <div class="labeltext">Font size</div>
+                            <div class="unit">
+                                <input id="font-size" type="number" name="font-size">
+                                <div>px</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- 
+                        'tab-navigation-icon-size': '45px',
+                        'history-icon-size': '17px',
+                        'player-cover-max-size-multiplier': '0.8',
+                        'player-main-icon-size': '17px',
+                        'player-icon-size': '17px',
+                        'player-small-icon-size': 'var(--player-icon-size)',
+                    -->
+                    <label for="background-blur">
+                        <input type="range" id="background-blur" name="background-blur" min="0" max="1" step="any">
+                        Background blur strength
+                    </label>
+                </div>
+
+                <!--
+                    These are aria-hidden because these are not "labels" in that they provide no description of a radio element.
+                    They are only <label>s because <label>s provide click forwarding, and they _should_ do that.
+                -->
+                <label class="preview new" for="playerType-new" aria-hidden>
+                    <template class="play-icon-template">
+                        <svg class="icon feather-play-circle" viewBox="0 0 40 40">
+                            <path d="M20 36.6667C29.2048 36.6667 36.6667 29.2048 36.6667 20C36.6667 10.7953 29.2048 3.33334 20 3.33334C10.7953 3.33334 3.33334 10.7953 3.33334 20C3.33334 29.2048 10.7953 36.6667 20 36.6667Z"/>
+                            <path d="M16.6667 13.3333L26.6667 20L16.6667 26.6667V13.3333Z" />
+                        </svg>
+                    </template>
+                    <template class="pause-icon-template">
+                        <svg class="icon feather-pause-circle" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="10" y1="15" x2="10" y2="9"/>
+                            <line x1="14" y1="15" x2="14" y2="9"/>
+                        </svg>
+                    </template>
+                    <img class="background-blur loaded" alt="" />
+                    <nav class="navigation">
+                        <div class="navigate-previous navigation-button visible">
+                            <svg class="icon feather-chevron-left" viewBox="0 0 24 24">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </div>
+                        <div class="navigation-scroll-container">
+                            <div class="navigation-scroll-items">
+                                <span class="now-playing-title">Now Playing</span>
+                            </div>
+                        </div>
+                        <div class="navigate-next navigation-button visible">
+                            <svg class="icon feather-chevron-right" viewBox="0 0 24 24">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </div>
+                    </nav>
+                    <main>
+                        <section class="player">
+                            <img class="cover" src="./images/default_cover.svg" alt="" />
+                            <div class="spacer"></div>
+                            <div class="infoline">
+                                <div class="infoline-content">
+                                    <span class="title">Nothing is playing currently.</span>
+                                </div>
+                            </div>
+                            <span class="artist">Choose a station to begin.</span>
+                            <div class="actions">
+                                <ul class="row">
+                                    <div class="action skip-previous">
+                                        <svg class="icon feather-skip-back" viewBox="0 0 24 24">
+                                            <polygon points="19 20 9 12 19 4 19 20"></polygon>
+                                            <line x1="5" y1="19" x2="5" y2="5"></line>
+                                        </svg>
+                                    </div>
+                                    <div class="action play big">
+                                        <svg class="icon feather-play-circle" viewBox="0 0 40 40">
+                                            <path d="M20 36.6667C29.2048 36.6667 36.6667 29.2048 36.6667 20C36.6667 10.7953 29.2048 3.33334 20 3.33334C10.7953 3.33334 3.33334 10.7953 3.33334 20C3.33334 29.2048 10.7953 36.6667 20 36.6667Z"/>
+                                            <path d="M16.6667 13.3333L26.6667 20L16.6667 26.6667V13.3333Z" />
+                                        </svg>
+                                    </div>
+                                    <div class="action skip-next">
+                                        <svg class="icon feather-skip-forward" viewBox="0 0 24 24">
+                                            <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                                            <line x1="19" y1="5" x2="19" y2="19"></line>
+                                        </svg>
+                                    </div>
+                                </ul>
+                                <ul class="row small">
+                                    <div class="action thumbs-down">
+                                        <svg class="icon feather-thumbs-down" viewBox="0 0 24 24">
+                                            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action tired-of-song">
+                                        <svg class="icon feather-clock" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <polyline points="12 6 12 12 16 14"></polyline>
+                                        </svg>
+                                    </div>
+                                    <div class="action settings">
+                                        <svg class="icon feather-sliders" viewBox="0 0 24 24">
+                                            <line x1="4" y1="21" x2="4" y2="14"></line>
+                                            <line x1="4" y1="10" x2="4" y2="3"></line>
+                                            <line x1="12" y1="21" x2="12" y2="12"></line>
+                                            <line x1="12" y1="8" x2="12" y2="3"></line>
+                                            <line x1="20" y1="21" x2="20" y2="16"></line>
+                                            <line x1="20" y1="12" x2="20" y2="3"></line>
+                                            <line x1="1" y1="14" x2="7" y2="14"></line>
+                                            <line x1="9" y1="8" x2="15" y2="8"></line>
+                                            <line x1="17" y1="16" x2="23" y2="16"></line>
+                                        </svg>
+                                    </div>
+                                    <div class="action download">
+                                        <svg class="icon feather-download-cloud" viewBox="0 0 24 24">
+                                            <polyline points="8 17 12 21 16 17"></polyline>
+                                            <line x1="12" y1="12" x2="12" y2="21"></line>
+                                            <path d="M20.88 18.09A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.29"></path>
+                                        </svg>
+                                    </div>
+                                    <div class="action thumbs-up">
+                                        <svg class="icon feather-thumbs-up" viewBox="0 0 24 24">
+                                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                                        </svg>
+                                    </div>
+                                </ul>
+                            </div>
+                        </section>
+                    </main>
+                </label>
+                <label class="preview old" for="playerType-old" aria-hidden>
+                    <template class="play-icon-template">
+                        <svg class="icon anesidora-play" width="28" height="13" viewBox="1 1 28 13">
+                            <path d="m13 3 5 4.5-5 4.5z" fill="currentColor"/>
+                        </svg>
+                    </template>
+                    <template class="pause-icon-template">
+                        <svg class="icon anesidora-pause" width="28" height="13" viewBox="1 1 28 13">
+                            <rect x="11" y="2" width="3" height="11" fill="currentColor"/>
+                            <rect x="16" y="2" width="3" height="11" fill="currentColor"/>
+                        </svg>
+                    </template>
+
+                    <img class="background-blur loaded" alt="" />
+                    <div class="navigate-previous navigation-button visible">
+                        <svg class="icon anesidora-previous" width="16" height="56" viewBox="2 2 16 56">
+                            <path d="m13 22.5-8 7.5 8 7.5z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <main>
+                        <section class="player">
+                            <img class="cover" src="./images/default_cover.svg" alt="" />
+                            <div class="valign">
+                                <div class="infoline">
+                                    <div class="infoline-content">
+                                        <a class="artist">Choose a station to begin.</a> - <a class="title">Nothing is playing currently.</a>
+                                    </div>
+                                </div>
+                                <input class="seekBar" inert aria-hidden type="range" min="0" max="100" value="0" step="any" />
+                                <ul class="actions">
+                                    <div class="action play big">
+                                        <svg class="icon anesidora-play" width="28" height="13" viewBox="1 1 28 13">
+                                            <path d="m13 3 5 4.5-5 4.5z" fill="currentColor"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action skip-next">
+                                        <svg class="icon anesidora-skip" width="28" height="22" viewBox="1 1 28 22">
+                                            <path d="m8 6 6.5 6-6.5 6z" fill="currentColor"/>
+                                            <path d="m14.5 6 6.5 6-6.5 6z" fill="currentColor"/>
+                                            <rect x="21" y="6" width="2" height="12" fill="currentColor"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action thumbs-up">
+                                        <svg class="icon dull anesidora-thumbs-up" width="28" height="13" viewBox="1 1 28 13">
+                                            <path d="m14.5 3c.8 0 1.6 0 1.5.7v2.3h3c.5 0 .5.5.5.8l-.2 3.2c-.1.5-1.6 2-2.1 2h-3.1c-2.1 0-2.1-2-3.6-2v-1.5c0-1.1.5-.5 1-.9 0 0 1-.6 1.6-1.2.7-.7 1.4-3.4 1.4-3.4z" fill="currentColor"/>
+                                            <path class="check" d="m19 4-5 5-2.5-2.5-1.5 1.5 4 4 6.5-6.5z" fill="#13416f"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action thumbs-down">
+                                        <svg class="icon dull anesidora-thumbs-down" width="28" height="13" viewBox="1 1 28 13">
+                                            <path d="m14.5 12c.8 0 1.6 0 1.5-.7v-2.3h3c.5 0 .5-.5.5-.8l-.2-3.2c-.1-.5-1.6-2-2.1-2h-3.1c-2.1 0-2.1 2-3.6 2v1.5c0 1.1.5.5 1 .9 0 0 1 .6 1.6 1.2.7.7 1.4 3.4 1.4 3.4z" fill="currentColor"/>
+                                            <path class="check" d="m19 4-5 5-2.5-2.5-1.5 1.5 4 4 6.5-6.5z" fill="#13416f"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action tired-of-song">
+                                        <svg class="icon dull anesidora-sleep" width="28" height="13" viewBox="1 1 28 13">
+                                            <path d="m8 7h5v1l-3.75 3h3.75v1h-5v-1l3.75-3h-3.75z" fill="currentColor"/>
+                                            <path d="m15 5h3v.75l-2 2.25h2v.75h-3v-.75l2-2.25h-2z" fill="currentColor"/>
+                                            <path d="m19 2.25h3v.5l-1.9 1.75h1.9v.5h-3v-.5l2-1.75h-2z" fill="currentColor"/>
+                                            <path class="check" d="m19 4.5-5 5-2.5-2.5-1.5 1.5 4 4 6.5-6.5z" fill="#13416f"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action download">
+                                        <svg class="icon anesidora-download" width="28" height="13" viewBox="1 1 28 13">
+                                            <path d="m11 3.5h7v3.5h2l-5.5 5.5-5.5-5.5h2z" fill="currentColor"/>
+                                        </svg>
+                                    </div>
+                                    <div class="action settings">
+                                        <svg class="icon dull anesidora-moreinfo" width="28" height="22" viewBox="1 1 28 22">
+                                            <circle cx="10" cy="17" r="1.5" fill="currentColor"/>
+                                            <circle cx="15" cy="17" r="1.5" fill="currentColor"/>
+                                            <circle cx="20" cy="17" r="1.5" fill="currentColor"/>
+                                        </svg>
+                                    </div>
+                                </ul>
+                            </div>
+                            <div class="volumewrap">
+                                <input class="volume" inert aria-hidden type="range" data-vertical="true" min="0" max="100" value="100" step="any" />
+                            </div>
+                        </section>
+                    </main>
+                    <div class="navigate-next navigation-button visible">
+                        <svg class="icon anesidora-next" width="16" height="56" viewBox="2 2 16 56">
+                            <path d="m15 30-8-7.5v15z" fill="currentColor"/>
+                        </svg>
+                    </div>
+                </label>
+            </section>
+            <!--
+            // Radio group: New or Old player type?
+            // Radio group: Dark or Light
+            // Radio group: Accent color for dark/light: can be straight light/grey or various colors, or custom colors
+
+            // Custom input: Player width/height. Drag a rectangle to determine size. css: resize: both works on non-textareas
+            // Make sure to have regular number inputs inside the resizeable appearance
+            // and wait to apply the number inputs until after blur or enter
+
+            // Show volume? new=false, old=true
+            // Show seekbar? new=false, old=true
+
+            // 
+            -->
+
+            <h2>Behavior</h2>
+            <!--
+            // Checkbox: Automatically skip when disliking
+
+            // Ads?
+
+
+            -->
+            <h2>Stats</h2>
+            <!--
+            // Total songs played / time listened
+            // Total tracks liked / disliked
+            // Total ads played / time listened
+
+
+            -->
+        </form>
+        <!--
     <form>
-        <div>
-            <label class="browser-style">Player Style</label>
-            <select id="playerStyle">
-                <option value="new">New</option>
-                <option value="old">Old</option>
-            </select>
-        </div>
-        <div>
-            <label class="browser-style">Player Width</label>
-            <input type="number" id="bodyWidth" class="browser-style">
-        </div>
-        <div>
-            <label class="browser-style">Player Height</label>
-            <input type="number" id="bodyHeight" class="browser-style">
-        </div>
         <div>
         <label class="browser-style">Song History to Store</label>
         <input type="number" id="historyNum" class="browser-style">
         </div>
-        <div id="check">
-            <label class="browser-style">Force HTTPS</label>
-            <input type="checkbox" id="forceSecure" class="browser-style">
-        </div>
-            <label class="browser-style" style="color: red; opacity: 0; height: max-content;" id="httpWarning">Are you sure you want to allow unencrypted traffic?</label>
-        <div>
             <label class="browser-style">Play/Pause Hotkey</label>
             <input type="text" id="playPauseHotkey" class="browser-style">
         </div>
@@ -47,13 +404,14 @@
             <input type="text" id="skipSongHotkey" class="browser-style">
         </div>
         <div>
-            <button type="button" id="theming" clsas="browser-style">Theme</button>
+            <button type="button" id="theming" class="browser-style">Theme</button>
             <button type="button" id="refresh" class="browser-style">Refresh Stations</button>
-            <button type="button" id="logout" class="browser-style">Logout</button>
             <button type="button" id="default" class="browser-style">Defaults</button>
             <button type="button" id="save" class="browser-style">Save</button>
         </div>
     </form>
-    <script src="js/options.js" type="text/javascript"></script>
+-->
+    
+        <script src="./js/options.js" type="text/javascript"></script>
     </body>
 </html>

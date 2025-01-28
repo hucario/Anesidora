@@ -24,10 +24,10 @@ var background = get_browser().extension.getBackgroundPage();
 function initBodySize() {
     "use strict";
     if (localStorage.bodyWidth === undefined || localStorage.bodyWidth === 0) {
-        localStorage.bodyWidth = 450;
+        localStorage.bodyWidth = default_width;
     }
     if (localStorage.bodyHeight === undefined || localStorage.bodyHeight === 0) {
-        localStorage.bodyHeight = 110;
+        localStorage.bodyHeight = default_height;
     }
     $("#bodyWidth").val(localStorage.bodyWidth);
     $("#bodyHeight").val(localStorage.bodyHeight);
@@ -434,8 +434,6 @@ $(document).ready(async function () {
     } else {
         updatePlayer();
     }
-
-    goToHistory();
 });
 
 function pause_audio () {

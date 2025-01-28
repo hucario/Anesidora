@@ -34,10 +34,5 @@ function Make-Extension {
 
 }
 
-New-Item -ItemType "directory" -Path common\js\jquery 2>$null
-
-Invoke-WebRequest -Uri http://code.jquery.com/jquery-3.3.1.min.js -OutFile common\js\jquery\jquery-3.3.1.min.js
-Invoke-WebRequest -Uri http://code.jquery.com/ui/1.12.1/jquery-ui.min.js -OutFile common\js\jquery\jquery-ui.min.js
-
 Make-Extension -platform "firefox" -extension "xpi" -DebugBuild $DebugBuild -KeepFiles $KeepFiles
 Make-Extension -platform "chrome" -extension "zip" -DebugBuild $DebugBuild -KeepFiles $KeepFiles

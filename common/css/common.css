@@ -1,0 +1,128 @@
+@font-face {
+    font-family: InterVariable;
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("./InterVariable.woff2") format("woff2");
+}
+@font-face {
+    font-family: InterVariable;
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("./InterVariable-Italic.woff2") format("woff2");
+}
+
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+button, input:not([type="range"], [type="checkbox"]) {
+    font: inherit;
+    background: none;
+    border: none;
+    color: inherit;
+    appearance: none;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+.spacer {
+    width: 0;
+    height: 0;
+    flex-grow: 1;
+}
+
+svg.icon .check {
+    display: none;
+}
+
+.icon.feather-play-circle > path:first-child {
+    fill: var(--player-main-icon-color);
+    stroke: var(--player-main-icon-color);
+}
+.icon.feather-play-circle > path:last-child {
+    fill: var(--player-main-icon-background-color);
+    stroke: var(--player-main-icon-background-color);
+}
+
+/* low specificity, in order to be overriden in js by updateMatchStyles() */
+/* this specificity is [0, 1, 0] whereas html:root is [0, 1, 1] */
+:root:where(:not(.new, .old)) {
+    --tab-navigation-background-color: #242424;
+    --tab-navigation-text-color: #FFF;
+    --tab-navigation-icon-size: 45px;
+
+    --background-color: #282828;
+    --text-color: #FFF;
+
+    --album-background-strength: 0.3;
+
+    --icon-default-background-color: transparent;
+    --icon-default-color: #C5C5C5;
+    --icon-active-background-color: var(--icon-default-background-color);
+    --icon-active-color: #FFAE00;
+    --icon-hover-background-color: var(--icon-default-background-color);
+    --icon-hover-color: var(--text-color);
+    --icon-active-color: #FFAE00;
+
+    --history-icon-size: 18px;
+    --history-line-differentiator: rgba(128, 128, 128, 0.1);
+
+    --player-main-icon-color: var(--text-color);
+
+    /*
+        In new player, this defines both height and width.
+        In old player, this defines height, but width is dependent on icon aspect ratio.
+    */
+    --player-main-icon-size: 40px;
+    --player-icon-size: 32px;
+    --player-icon-color: var(--text-color);
+    --player-icon-background-color: var(--icon-default-background-color);
+
+    --player-small-icon-size: 18px;
+    --player-small-icon-color: var(--icon-default-color);
+    --player-small-icon-background-color: var(--icon-default-background-color);
+
+    --stations-play-background-color: rgba(0, 0, 0, 0.5);
+    --stations-active-station-background: rgba(255, 157, 0, 0.1);
+    --stations-active-station-color: white;
+
+    --accounts-icon-success-color: #3cd300;
+    --accounts-icon-warning-color: #ffbb00;
+    --accounts-tooltip-background-color: #111;
+    --color-scheme-type: light dark;
+
+
+
+    --font-family: InterVariable, Arial, system-ui, sans-serif;
+}
+
+html.new, html.old {
+    font-size: var(--font-size);
+}
+
+html.new, .new body,
+html.old, .old body {
+    background-color: #333;
+}
+
+html.new, .new body,
+html.old, .old body,
+#anesidora {
+    height: var(--viewport-height);
+    width: var(--viewport-width);
+}

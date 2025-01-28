@@ -4,6 +4,7 @@ Login Security
 Password and login security is a large and reasonable concern. The safety and security of passwords is important, and there is no reason to implicitly "trust" an application. The goal of this document is to earn your trust.
 
 Through the whole of Anesidora, your login credentials are only used in a few locations and are only sent to Pandora directly over a secured (HTTPS) connection. In order to demonstrate that this is the truth, I've linked all locations within Anesidora where either your username or password are utilized.
+Special care has been used so that these functions are as readable as possible.
 
 ## [anesidora.js:userLogin](https://github.com/pvrs12/Anesidora/blob/master/common/js/anesidora.js#L137)
 This function performs the actual login to Pandora. This verifies that the username and password have been set before proceeding. Then it places the credentials within an object before passing it on to `sendRequest`. `sendRequest` transmits the credentials over a secured (HTTPS) connection to Pandora.
