@@ -22,7 +22,7 @@ if (logoHolder) {
                 requestBody = latestVersionResponse;
             } else {
                 const apiRequest = await fetch('https://api.github.com/repos/pvrs12/Anesidora/releases/latest');
-                requestBody = await apiRequest.json();
+                requestBody = latestVersionResponse = await apiRequest.json();
             }
         } catch(e) {
             return {
